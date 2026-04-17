@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aera S1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-gem"></div>
+    <span class="logo-text">Aera S1</span>
+  </div>
+
+  <!-- New Chat button -->
+  <button class="new-chat-btn" onclick="newChat()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+    <span>New chat</span>
+  </button>
+
+  <!-- Chat history list -->
+  <div class="chat-history-wrap">
+    <div class="chat-history-label">Recent</div>
+    <div class="chat-history" id="chat-history">
+      <div class="chat-history-empty" id="chat-history-empty">No conversations yet</div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <button class="nav-item active" onclick="navigate('home', this)">
+      <span class="nav-icon">⌂</span>
+      <span>Home</span>
+    </button>
+    <button class="nav-item" onclick="navigate('notes', this)">
+      <span class="nav-icon">✦</span>
+      <span>Notes &amp; Q&amp;A</span>
+    </button>
+    <button class="nav-item" onclick="navigate('flashcards', this)">
+      <span class="nav-icon">⟐</span>
+      <span>Flashcards</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <label class="world-toggle">
+      <input type="checkbox" id="qa-world" onchange="onWorldToggle()" />
+      <span class="toggle-track"></span>
+      <span class="world-toggle-label">World Knowledge</span>
+    </label>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-toggle-btn">
+      <svg class="theme-toggle-icon" id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="theme-toggle-icon" id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <span class="theme-toggle-label" id="theme-toggle-label">Light mode</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════════
+     MAIN
+══════════════════════════════════════════════════ -->
+<main class="main">
+
+  <!-- ── HOME ─────────────────────────────────────────
+       Full-height chat interface. Input pinned at
+       bottom; messages scroll above.
+  ─────────────────────────────────────────────────── -->
+  <section class="section active home-section" id="section-home">
+
+    <!-- Scrollable message area -->
+    <div class="home-chat-area" id="home-chat-area">
+
+      <!-- Welcome state (hidden once first message sent) -->
+      <div class="home-welcome" id="home-welcome">
+        <div class="home-welcome-gem"></div>
+        <h2 class="home-welcome-title">Hi, I'm Aera.</h2>
+        <p class="home-welcome-sub">Ask anything — I'll teach you step by step.</p>
+
+        <!-- Suggestion chips -->
+        <div class="home-chips">
+          <button class="home-chip" onclick="useChip(this)">Explain a concept</button>
+          <button class="home-chip" onclick="useChip(this)">Help me understand this topic</button>
+          <button class="home-chip" onclick="useChip(this)">Quiz me</button>
+          <button class="home-chip" onclick="useChip(this)">Summarise my notes</button>
+        </div>
+
+        <!-- Secondary nav links -->
+        <div class="home-quick-nav">
+          <button class="home-quick-btn" onclick="navigate('notes', document.querySelectorAll('.nav-item')[1])">
+            <span>✦</span> Notes &amp; Flashcards
+          </button>
+          <button class="home-quick-btn" onclick="navigate('flashcards', document.querySelectorAll('.nav-item')[2])">
+            <span>⟐</span> Flashcard Maker
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat bubbles injected here by JS -->
+    </div>
+
+    <!-- Pinned input zone -->
+    <div class="home-input-zone">
+      <!-- File input (hidden) -->
+      <input type="file" id="home-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp"
+             style="display:none" onchange="handleHomeFile(this)" />
+
+      <div class="home-input-box" id="home-input-box">
+        <textarea
+          id="home-input"
+          rows="1"
+          placeholder="Ask anything, paste homework, or upload notes…"
+          oninput="autoResize(this)"
+          onkeydown="onHomeKey(event)"
+        ></textarea>
+
+        <div class="home-input-footer">
+          <div class="home-media-btns">
+            <button class="home-media-btn" title="Upload file (PDF / image)"
+                    onclick="$('home-file-input').click()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <button class="home-media-btn" title="Camera — capture photo of notes"
+                    onclick="openHomeCamera()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </button>
+            <button class="home-media-btn" id="home-audio-btn" title="Voice input"
+                    onclick="toggleHomeRecording()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
+          </div>
+
+          <!-- File badge -->
+          <div class="home-file-badge" id="home-file-badge">
+            <span id="home-badge-name"></span>
+            <button onclick="clearHomeFile()">✕</button>
+          </div>
+
+          <button class="home-send-btn" id="home-send-btn" onclick="sendHomeMessage()">
+            <div class="spinner" id="home-spinner"></div>
+            <span id="home-send-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div class="err-msg" id="home-error"></div>
+      <p class="home-input-hint">Enter to send &nbsp;·&nbsp; Shift+Enter for new line</p>
+    </div>
+
+  </section>
+
+  <!-- ── NOTES & Q&A ──────────────────────────────────── -->
+  <section class="section" id="section-notes">
+    <div class="section-title">Notes &amp; Q&amp;A</div>
+    <div class="section-sub">Add your material below — text, file, camera, or voice.</div>
+
+    <!-- Unified input panel -->
+    <div class="input-panel" id="input-panel">
+      <textarea id="material" placeholder="Paste notes, type a topic, or use the tools below to attach a file, take a photo, or record audio…"
+        oninput="autoResize(this)" rows="6"></textarea>
+      <div class="input-toolbar">
+        <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.webp" style="display:none" onchange="handleFileUpload(this)" />
+        <button class="input-tool-btn" id="file-btn" onclick="document.getElementById('file-input').click()">📎 File</button>
+        <button class="input-tool-btn" onclick="openCamera()">📷 Camera</button>
+        <button class="input-tool-btn" id="audio-btn" onclick="toggleRecording()">🎙 Voice</button>
+        <div class="file-badge" id="file-badge">
+          <span id="file-badge-name"></span>
+          <span class="file-badge-close" onclick="clearFile()">✕</span>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <button class="generate-btn" id="gen-btn" onclick="generate()">
+          <div class="spinner"></div>
+          <span class="btn-label">Generate</span>
+        </button>
+      </div>
+    </div>
+    <div class="err-msg" id="gen-error"></div>
+
+    <div class="output-area" id="notes-output">
+      <div class="restyle-bar">
+        <input class="restyle-input" id="notes-style" type="text"
+          placeholder="Restyle notes… e.g. 'shorter', 'ELI5', 'numbered lists'"
+          onkeydown="if(event.key==='Enter') restyleNotes()" />
+        <button class="restyle-btn" id="restyle-btn" onclick="restyleNotes()">
+          <div class="spinner"></div>
+          <span class="btn-label">Apply</span>
+        </button>
+      </div>
+      <div class="output-panel">
+        <div class="output-panel-header">
+          <span class="output-panel-title">Notes</span>
+          <button class="btn-outline" onclick="copyEl('notes-body', this)">⎘ Copy</button>
+          <button class="btn-outline" onclick="exportText('notes-body', 'aera-notes.txt')" style="margin-left:.4rem">↓ Export</button>
+        </div>
+        <div class="output-panel-body" id="notes-body"></div>
+      </div>
+    </div>
+
+    <!-- Q&A Chat (Notes section) -->
+    <div class="chat-wrap">
+      <div class="chat-head">
+        <span class="chat-head-title">Q&amp;A Chat</span>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-empty-msg" id="chat-empty">
+          Ask anything — questions about your material, or any topic with World Knowledge on.
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <textarea id="chat-input" rows="1" placeholder="Ask a question…"
+          oninput="autoResize(this)"
+          onkeydown="onChatKey(event)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+          <div class="spinner" id="send-spinner"></div>
+          <span id="send-icon">&#9658;</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FLASHCARD MAKER ──────────────────────────────── -->
+  <section class="section" id="section-flashcards">
+    <div class="fc-section-inner">
+      <div class="fc-deck-bar">
+        <div class="fc-deck-info">
+          <h2>Flashcard Maker</h2>
+          <p id="fc-deck-sub">0 cards in deck</p>
+        </div>
+        <div class="fc-deck-controls">
+          <label class="toggle-small">
+            <input type="checkbox" id="fc-shuffle" onchange="toggleShuffle()" />
+            <span class="toggle-track"></span>
+            Shuffle
+          </label>
+          <button class="btn-outline" onclick="exportCards()">↓ Export</button>
+        </div>
+      </div>
+
+      <div class="fc-progress-bar">
+        <div class="fc-progress-fill" id="fc-progress" style="width:0%"></div>
+      </div>
+
+      <div class="fc-stage" id="fc-stage" onclick="flipCard()">
+        <div class="fc-card-3d" id="fc-card">
+          <div class="fc-face fc-face-front">
+            <div class="fc-face-label">Question</div>
+            <div class="fc-face-text" id="fc-question">No cards yet — generate from Notes &amp; Q&amp;A or add one below.</div>
+            <div class="fc-hint-bottom">click or press Space to flip</div>
+          </div>
+          <div class="fc-face fc-face-back">
+            <div class="fc-face-label">Answer</div>
+            <div class="fc-face-text" id="fc-answer">—</div>
+            <div class="fc-hint-bottom">click or press Space to flip back</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fc-kbd-hints">
+        <span><span class="kbd">←</span><span class="kbd">→</span> Navigate</span>
+        <span><span class="kbd">Space</span> Flip</span>
+        <span id="fc-counter" style="color:var(--text-dim)">0 / 0</span>
+      </div>
+
+      <div class="fc-controls">
+        <button class="fc-btn" id="fc-prev" onclick="fcMove(-1)" disabled>← Prev</button>
+        <div id="fc-delete-wrap">
+          <button class="fc-btn danger-btn" onclick="promptDelete()">✕ Delete</button>
+        </div>
+        <button class="fc-btn" id="fc-next" onclick="fcMove(1)" disabled>Next →</button>
+      </div>
+
+      <div class="fc-add-card">
+        <div class="fc-add-title">Add a card</div>
+        <div class="fc-add-fields">
+          <input type="text" id="fc-new-q" placeholder="Question"
+            onkeydown="if(event.key==='Enter') document.getElementById('fc-new-a').focus()" />
+          <input type="text" id="fc-new-a" placeholder="Answer"
+            onkeydown="if(event.key==='Enter') addCard()" />
+        </div>
+        <button class="fc-add-submit" onclick="addCard()">+ Add Card</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ══════════════════════════════════════════════════
+     CAMERA MODAL (shared by Home + Notes)
+══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="camera-modal">
+  <div class="modal-box">
+    <div class="modal-title">📷 Take a photo of your notes</div>
+    <video class="modal-video" id="camera-video" autoplay playsinline></video>
+    <canvas id="camera-canvas" style="display:none"></canvas>
+    <div class="modal-actions">
+      <button class="btn-solid" onclick="closeCamera()">Cancel</button>
+      <button class="btn-solid primary" onclick="capturePhoto()">Capture</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════ -->
+<script>
+/* ──────────────────────────────────────────────────
+   SHARED STATE
+────────────────────────────────────────────────── */
+let currentMaterial     = "";
+let conversationHistory = [];   // shared by Home + Notes Q&A
+let currentSection      = "home";
+let cameraStream        = null;
+let cameraTarget        = "notes";   // "home" or "notes" — which section triggered camera
+let mediaRecorder       = null;
+let audioChunks         = [];
+let homeRecording       = false;
+
+/* Chat history (localStorage) */
+const CHAT_STORE_KEY    = "aera_chats_v1";
+const CHAT_ACTIVE_KEY   = "aera_active_chat_v1";
+const THEME_KEY         = "aera_theme_v1";
+let chats               = [];   // [{id, title, messages, updatedAt}]
+let activeChatId        = null;
+
+/* ──────────────────────────────────────────────────
+   THEME
+────────────────────────────────────────────────── */
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const isDark = theme === "dark";
+  const sun = document.getElementById("theme-icon-sun");
+  const moon = document.getElementById("theme-icon-moon");
+  const label = document.getElementById("theme-toggle-label");
+  if (sun && moon) {
+    sun.style.display  = isDark ? "none" : "block";
+    moon.style.display = isDark ? "block" : "none";
+  }
+  if (label) label.textContent = isDark ? "Light mode" : "Dark mode";
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  const next = current === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+}
+(function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || "dark";
+  applyTheme(saved);
+})();
+
+/* ──────────────────────────────────────────────────
+   CHAT HISTORY
+────────────────────────────────────────────────── */
+function loadChats() {
+  try {
+    chats = JSON.parse(localStorage.getItem(CHAT_STORE_KEY) || "[]");
+    activeChatId = localStorage.getItem(CHAT_ACTIVE_KEY) || null;
+  } catch { chats = []; activeChatId = null; }
+}
+function saveChats() {
+  localStorage.setItem(CHAT_STORE_KEY, JSON.stringify(chats));
+  if (activeChatId) localStorage.setItem(CHAT_ACTIVE_KEY, activeChatId);
+  else localStorage.removeItem(CHAT_ACTIVE_KEY);
+}
+function makeChatId() { return "c_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function currentChat() { return chats.find(c => c.id === activeChatId); }
+
+function titleFromMessage(text) {
+  const t = (text || "").trim().replace(/\s+/g, " ");
+  if (!t) return "New chat";
+  return t.length > 42 ? t.slice(0, 42) + "…" : t;
+}
+
+function renderChatHistory() {
+  const wrap  = document.getElementById("chat-history");
+  const empty = document.getElementById("chat-history-empty");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  if (!chats.length) {
+    wrap.appendChild(empty || Object.assign(document.createElement("div"), { className: "chat-history-empty", textContent: "No conversations yet" }));
+    return;
+  }
+  const sorted = [...chats].sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+  for (const c of sorted) {
+    const item = document.createElement("button");
+    item.className = "chat-history-item" + (c.id === activeChatId ? " active" : "");
+    item.onclick = (e) => { if (e.target.closest(".chat-history-del")) return; switchChat(c.id); };
+
+    const title = document.createElement("span");
+    title.className = "chat-history-title";
+    title.textContent = c.title || "New chat";
+
+    const del = document.createElement("button");
+    del.className = "chat-history-del";
+    del.title = "Delete chat";
+    del.innerHTML = "&times;";
+    del.onclick = (e) => { e.stopPropagation(); deleteChat(c.id); };
+
+    item.appendChild(title);
+    item.appendChild(del);
+    wrap.appendChild(item);
+  }
+}
+
+function newChat() {
+  // If we're already on an empty chat, just focus
+  const cur = currentChat();
+  if (cur && cur.messages.length === 0) {
+    navigateToHome();
+    document.getElementById("home-input")?.focus();
+    return;
+  }
+  const chat = { id: makeChatId(), title: "New chat", messages: [], updatedAt: Date.now() };
+  chats.unshift(chat);
+  activeChatId = chat.id;
+  conversationHistory = chat.messages;
+  saveChats();
+  // Reset UI
+  clearHomeChatUI();
+  fetch("/reset-model", { method: "POST" }).catch(()=>{});
+  renderChatHistory();
+  navigateToHome();
+  setTimeout(() => document.getElementById("home-input")?.focus(), 80);
+}
+
+function switchChat(id) {
+  const chat = chats.find(c => c.id === id);
+  if (!chat) return;
+  activeChatId = id;
+  conversationHistory = chat.messages;
+  saveChats();
+  renderChatHistory();
+  rebuildHomeChatUI();
+  fetch("/reset-model", { method: "POST" }).catch(()=>{});
+  navigateToHome();
+}
+
+function deleteChat(id) {
+  chats = chats.filter(c => c.id !== id);
+  if (activeChatId === id) {
+    activeChatId = chats[0]?.id || null;
+    conversationHistory = chats[0]?.messages || [];
+    rebuildHomeChatUI();
+  }
+  saveChats();
+  renderChatHistory();
+}
+
+function persistCurrentChat() {
+  const chat = currentChat();
+  if (!chat) return;
+  chat.messages = conversationHistory;
+  chat.updatedAt = Date.now();
+  // Auto-title from first user message
+  if (chat.title === "New chat" || !chat.title) {
+    const firstUser = conversationHistory.find(m => m.role === "user");
+    if (firstUser) chat.title = titleFromMessage(firstUser.content);
+  }
+  saveChats();
+  renderChatHistory();
+}
+
+function ensureActiveChat() {
+  if (!currentChat()) {
+    const chat = { id: makeChatId(), title: "New chat", messages: [], updatedAt: Date.now() };
+    chats.unshift(chat);
+    activeChatId = chat.id;
+    conversationHistory = chat.messages;
+    saveChats();
+    renderChatHistory();
+  }
+}
+
+function clearHomeChatUI() {
+  const area = document.getElementById("home-chat-area");
+  if (!area) return;
+  // Remove bubbles & notes, keep welcome
+  area.querySelectorAll(".home-bubble, .home-sys-note, .home-typing").forEach(el => el.remove());
+  const welcome = document.getElementById("home-welcome");
+  if (welcome) welcome.style.display = "";
+}
+
+function rebuildHomeChatUI() {
+  clearHomeChatUI();
+  const freeMode = document.getElementById("qa-world")?.checked;
+  if (conversationHistory.length > 0) {
+    const welcome = document.getElementById("home-welcome");
+    if (welcome) welcome.style.display = "none";
+    for (const m of conversationHistory) {
+      homeAppendBubble(m.role, m.content, freeMode, /*skipPersist=*/true);
+    }
+  }
+}
+
+function navigateToHome() {
+  if (currentSection === "home") return;
+  const btn = document.querySelector('.nav-item[onclick*="home"]');
+  if (btn) navigate("home", btn);
+}
+
+/* ──────────────────────────────────────────────────
+   UTILS
+────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 200) + "px";
+}
+
+function copyEl(id, btn) {
+  navigator.clipboard.writeText($(id).innerText).then(() => {
+    btn.textContent = "✓ Copied";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = "⎘ Copy"; btn.classList.remove("copied"); }, 1800);
+  });
+}
+function copyRaw(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const prev = btn.textContent;
+    btn.textContent = "✓ Copied";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = prev; btn.classList.remove("copied"); }, 1800);
+  });
+}
+function exportText(id, filename) {
+  const blob = new Blob([$(id).innerText], { type: "text/plain" });
+  Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: filename }).click();
+}
+function exportCards() {
+  if (!deck.length) return;
+  const csv = "Question,Answer\n" + deck.map(c =>
+    `"${c.question.replace(/"/g,'""')}","${c.answer.replace(/"/g,'""')}"`).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "aera-flashcards.csv" }).click();
+}
+function showErr(id, msg) { const e=$(id); e.textContent=msg; e.style.display="block"; }
+function clearErr(id) { $(id).style.display="none"; }
+function renderBold(text) {
+  // Bold
+  let html = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Allow inline SVG through — it's generated by the tutor for diagrams
+  // (already valid HTML, just needs to not be escaped)
+  return html;
+}
+
+/* ── Chart detection & rendering ─────────────────── */
+function _themeCol(varName, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return v || fallback;
+  } catch { return fallback; }
+}
+/* First color = theme accent. Rest = muted neutrals that work in both themes. */
+function getChartColors() {
+  const accent = _themeCol("--accent", "#8b7cf6");
+  return [
+    accent,
+    "#8a9db3","#a39878","#7fa792","#b38878",
+    "#9d88a8","#88a39e","#a88a8a","#78a3a3","#b3a488"
+  ];
+}
+
+const _CHART_NOISE = new Set([
+  "the","a","an","of","in","is","it","its","this","that","are","was","be",
+  "by","to","at","on","or","and","but","for","with","from","has","have",
+  "had","as","up","so","only","about","over","more","less","just","also",
+  "than","around","approximately","roughly","nearly","almost","which",
+  "makes","made","making","being","been","their","these","those","other",
+  "hand","step","not","can","will","may","such","each","most","all","some",
+  "into","like","very","would","should","could","does","did","do","no","yes",
+  "proportion","percentage","percent","amount","component","volume","part",
+  "fraction","ratio","total","remaining","rest","main","largest","smallest",
+  "processes","process","because","means","between","what","how","why",
+]);
+
+/**
+ * Scan text for percentage data (e.g. "nitrogen...78%") and extract label+value pairs.
+ * Looks at the words immediately NEAR the number, not the whole sentence.
+ * Returns array of {label, value} or empty array.
+ */
+function extractPercentages(text) {
+  const results = [];
+  const seen = new Set();
+  const re = /(\d{1,3}(?:\.\d+)?)\s*%/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const val = parseFloat(m[1]);
+    if (val <= 0 || val > 100) continue;
+
+    // Grab a small window around the percentage: 50 chars before, 30 chars after
+    const before = text.slice(Math.max(0, m.index - 50), m.index);
+    const after  = text.slice(m.index + m[0].length, Math.min(text.length, m.index + m[0].length + 30));
+
+    let label = null;
+
+    // First: look BEFORE the number, closest word first (right-to-left)
+    const beforeWords = before.match(/[a-zA-Z\u00C0-\u024F]+/g) || [];
+    for (let i = beforeWords.length - 1; i >= 0; i--) {
+      const w = beforeWords[i];
+      if (w.length > 2 && !_CHART_NOISE.has(w.toLowerCase())) {
+        label = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+        break;
+      }
+    }
+
+    // If nothing useful before, look AFTER the number (left-to-right)
+    if (!label) {
+      const afterWords = after.match(/[a-zA-Z\u00C0-\u024F]+/g) || [];
+      for (const w of afterWords) {
+        if (w.length > 2 && !_CHART_NOISE.has(w.toLowerCase())) {
+          label = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+          break;
+        }
+      }
+    }
+
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      results.push({ label, value: val });
+    }
+  }
+  return results;
+}
+
+/**
+ * Scan text for a "Chart Type: ..." block output by the model.
+ * Returns {raw, type, catPoints, xyPoints} or null.
+ */
+function parseChartBlock(text) {
+  const match = text.match(/Chart Type:\s*(.+)\n([\s\S]+?)(?=\n\n|\n[A-Z]|$)/i);
+  if (!match) return null;
+  const raw  = match[0];
+  const type = match[1].trim().toLowerCase();
+  const body = match[2];
+
+  const xyPoints = [...body.matchAll(/\(\s*([+-]?[\d.]+)\s*,\s*([+-]?[\d.]+)\s*\)/g)]
+    .map(m => ({ x: parseFloat(m[1]), y: parseFloat(m[2]) }));
+
+  const catPoints = [...body.matchAll(/^([^:\n()]+):\s*([\d.]+)\s*$/gm)]
+    .filter(m => !/(axis|chart type|categories|data)/i.test(m[1]))
+    .map(m => ({ label: m[1].trim(), value: parseFloat(m[2]) }));
+
+  return { raw, type, catPoints, xyPoints };
+}
+
+/**
+ * Build a Chart.js config from extracted data.
+ */
+function buildChart(canvas, type, catPoints, xyPoints) {
+  const textColor = _themeCol("--text-dim", "#a8a8a8");
+  const gridColor = _themeCol("--border", "rgba(128,128,128,0.15)");
+  const accent    = _themeCol("--accent", "#8b7cf6");
+  const palette   = getChartColors();
+  const opts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: textColor, font: { family: "Inter, sans-serif", size: 11 } } } }
+  };
+  const tickColor = textColor;
+
+  if (type === "pie" && catPoints.length) {
+    return new Chart(canvas, {
+      type: "pie",
+      data: { labels: catPoints.map(p=>p.label), datasets: [{ data: catPoints.map(p=>p.value), backgroundColor: palette.slice(0, catPoints.length), borderWidth: 0 }] },
+      options: opts
+    });
+  }
+  if (type === "bar" && catPoints.length) {
+    return new Chart(canvas, {
+      type: "bar",
+      data: { labels: catPoints.map(p=>p.label), datasets: [{ label: "Value", data: catPoints.map(p=>p.value), backgroundColor: palette.slice(0, catPoints.length), borderRadius: 6, borderSkipped: false }] },
+      options: { ...opts, scales: { x: { grid:{color:gridColor, display:false}, ticks:{color:tickColor} }, y: { grid:{color:gridColor}, ticks:{color:tickColor} } }, plugins: { legend: { display: false } } }
+    });
+  }
+  if (type === "line" && xyPoints.length) {
+    return new Chart(canvas, {
+      type: "line",
+      data: { datasets: [{ label: "Value", data: xyPoints, borderColor: accent, backgroundColor: accent+"22", tension: 0.35, fill: true, pointRadius: 3, pointBackgroundColor: accent, borderWidth: 2 }] },
+      options: { ...opts, scales: { x: { type:"linear", grid:{color:gridColor}, ticks:{color:tickColor} }, y: { grid:{color:gridColor}, ticks:{color:tickColor} } } }
+    });
+  }
+  if (type === "scatter" && xyPoints.length) {
+    return new Chart(canvas, {
+      type: "scatter",
+      data: { datasets: [{ label: "Value", data: xyPoints, backgroundColor: accent, pointRadius: 5 }] },
+      options: { ...opts, scales: { x: { type:"linear", grid:{color:gridColor}, ticks:{color:tickColor} }, y: { grid:{color:gridColor}, ticks:{color:tickColor} } } }
+    });
+  }
+  return null;
+}
+
+/* ── Streaming typewriter helpers ───────────────────
+   Reveals assistant text word-by-word for a "thinking live" feel.
+   Charts/SVGs appear as discrete steps within the same stream.
+─────────────────────────────────────────────────── */
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function _scrollParentToBottom(el) {
+  let p = el && el.parentElement;
+  while (p) {
+    const s = getComputedStyle(p);
+    if (/(auto|scroll)/.test(s.overflowY) && p.scrollHeight > p.clientHeight) {
+      p.scrollTop = p.scrollHeight;
+      return;
+    }
+    p = p.parentElement;
+  }
+}
+
+/** Split text preserving bold markers: [{text, bold}] */
+function _tokenizeBold(text) {
+  const out = [];
+  const re = /\*\*(.+?)\*\*/g;
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), bold: false });
+    out.push({ text: m[1], bold: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), bold: false });
+  return out;
+}
+
+/**
+ * Build an ordered render plan from the response text.
+ * Each step is one of:
+ *   { kind: "text", content }
+ *   { kind: "svg",  content }
+ *   { kind: "chart", chartType, catPoints, xyPoints }
+ */
+function buildRenderPlan(text) {
+  const steps = [];
+  let remaining = text;
+  let trailingChart = null;
+
+  // 1. Explicit chart block?
+  const block = parseChartBlock(remaining);
+  if (block) {
+    const t = block.type.includes("pie") ? "pie"
+            : block.type.includes("bar") ? "bar"
+            : block.type.includes("line") ? "line"
+            : block.type.includes("scatter") ? "scatter" : null;
+    if (t && (block.catPoints.length || block.xyPoints.length)) {
+      remaining = remaining.replace(block.raw, "").trim();
+      trailingChart = { kind: "chart", chartType: t, catPoints: block.catPoints, xyPoints: block.xyPoints };
+    }
+  }
+
+  // 2. Auto-detect percentages
+  if (!trailingChart) {
+    const pct = extractPercentages(remaining);
+    if (pct.length >= 2) {
+      trailingChart = { kind: "chart", chartType: "pie", catPoints: pct, xyPoints: [] };
+    }
+  }
+
+  // 3. Split on SVG blocks (text + svg interleaved)
+  const svgRe = /<svg[\s\S]*?<\/svg>/gi;
+  const matches = [...remaining.matchAll(svgRe)];
+  if (matches.length === 0) {
+    if (remaining.length) steps.push({ kind: "text", content: remaining });
+  } else {
+    let idx = 0;
+    for (const m of matches) {
+      const before = remaining.slice(idx, m.index);
+      if (before.length) steps.push({ kind: "text", content: before });
+      steps.push({ kind: "svg", content: m[0] });
+      idx = m.index + m[0].length;
+    }
+    const after = remaining.slice(idx);
+    if (after.length) steps.push({ kind: "text", content: after });
+  }
+
+  if (trailingChart) steps.push(trailingChart);
+  return steps;
+}
+
+/** Stream a text segment word-by-word into `host`. */
+async function _streamTextSegment(host, text, cursor) {
+  const tokens = _tokenizeBold(text);
+  for (const tok of tokens) {
+    const target = tok.bold ? document.createElement("strong") : host;
+    if (tok.bold) host.appendChild(target);
+
+    // Split keeping whitespace chunks so we preserve spacing and newlines
+    const parts = tok.text.split(/(\s+)/).filter(s => s.length > 0);
+    for (const w of parts) {
+      target.appendChild(document.createTextNode(w));
+
+      // Keep cursor at end of container
+      if (cursor) {
+        const root = host.parentElement;
+        if (cursor.parentNode) cursor.parentNode.removeChild(cursor);
+        if (root) root.appendChild(cursor);
+      }
+
+      // Whitespace chunks: gentle pause on newlines, no per-word delay
+      if (/^\s+$/.test(w)) {
+        if (/\n\n/.test(w))      { _scrollParentToBottom(host); await _sleep(70); }
+        else if (/\n/.test(w))   { _scrollParentToBottom(host); await _sleep(28); }
+        continue;
+      }
+
+      // Base delay per word + extra pause after punctuation
+      let delay = 13 + Math.random() * 9; // 13–22ms
+      const lastCh = w.slice(-1);
+      if (/[.!?]/.test(lastCh))       delay += 85;
+      else if (/[,;:]/.test(lastCh))  delay += 28;
+      await _sleep(delay);
+    }
+  }
+  _scrollParentToBottom(host);
+}
+
+/**
+ * Render assistant message content. Streams by default; pass opts.instant=true
+ * to render immediately (used for history replay).
+ */
+async function renderMessageContent(container, text, opts = {}) {
+  const instant = !!opts.instant;
+  const plan = buildRenderPlan(text);
+
+  // Cursor element shown while typing
+  let cursor = null;
+  if (!instant) {
+    cursor = document.createElement("span");
+    cursor.className = "stream-cursor";
+    container.appendChild(cursor);
+  }
+
+  try {
+    if (!instant) await _sleep(90); // brief warm-up before first word
+
+    for (const step of plan) {
+      if (step.kind === "text") {
+        const seg = document.createElement("span");
+        seg.style.whiteSpace = "pre-wrap";
+        // Insert BEFORE the cursor so cursor stays at end
+        if (cursor && cursor.parentNode === container) {
+          container.insertBefore(seg, cursor);
+        } else {
+          container.appendChild(seg);
+        }
+        if (instant) {
+          seg.innerHTML = renderBold(step.content);
+        } else {
+          await _streamTextSegment(seg, step.content, cursor);
+        }
+      }
+      else if (step.kind === "svg") {
+        const wrap = document.createElement("div");
+        wrap.className = "svg-diagram";
+        wrap.innerHTML = step.content;
+        if (cursor && cursor.parentNode === container) {
+          container.insertBefore(wrap, cursor);
+        } else {
+          container.appendChild(wrap);
+        }
+        _scrollParentToBottom(container);
+        if (!instant) await _sleep(80);
+      }
+      else if (step.kind === "chart") {
+        const wrap = document.createElement("div");
+        wrap.className = "chart-wrap";
+        const canvas = document.createElement("canvas");
+        wrap.appendChild(canvas);
+        if (cursor && cursor.parentNode === container) {
+          container.insertBefore(wrap, cursor);
+        } else {
+          container.appendChild(wrap);
+        }
+        buildChart(canvas, step.chartType, step.catPoints, step.xyPoints);
+        _scrollParentToBottom(container);
+        if (!instant) await _sleep(120);
+      }
+    }
+  } catch (e) {
+    console.error("Render error:", e);
+    // Emergency fallback: dump remaining text
+    container.style.whiteSpace = "pre-wrap";
+    if (!container.innerText.trim()) container.innerHTML = renderBold(text);
+  } finally {
+    if (cursor && cursor.parentNode) cursor.parentNode.removeChild(cursor);
+  }
+}
+function showSkeleton(id, n=6) {
+  const w=["80%","58%","90%","65%","75%","50%","88%","62%"];
+  $(id).innerHTML = w.slice(0,n).map(x=>`<div class="skeleton" style="width:${x}"></div>`).join("");
+}
+
+/* ──────────────────────────────────────────────────
+   NAVIGATION
+────────────────────────────────────────────────── */
+function navigate(section, btn) {
+  if (section === currentSection) return;
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  const from = $("section-" + currentSection);
+  const to   = $("section-" + section);
+  from.classList.add("exit");
+  setTimeout(() => {
+    from.classList.remove("active", "exit");
+    to.classList.add("active");
+    // Auto-focus home input when returning home
+    if (section === "home") {
+      setTimeout(() => $("home-input").focus(), 60);
+    }
+  }, 220);
+  currentSection = section;
+}
+
+/* ──────────────────────────────────────────────────
+   WORLD KNOWLEDGE TOGGLE
+────────────────────────────────────────────────── */
+function onWorldToggle() {
+  const on = $("qa-world").checked;
+  const hint = on ? "Ask anything in the world…" : "Ask anything, paste homework, or upload notes…";
+  $("home-input").placeholder = hint;
+  $("chat-input").placeholder = on ? "Ask anything in the world…" : "Ask a question…";
+}
+
+/* ──────────────────────────────────────────────────
+   SUGGESTION CHIPS (Home)
+────────────────────────────────────────────────── */
+function useChip(btn) {
+  $("home-input").value = btn.textContent;
+  autoResize($("home-input"));
+  $("home-input").focus();
+}
+
+/* ══════════════════════════════════════════════════
+   HOME CHAT
+══════════════════════════════════════════════════ */
+
+function onHomeKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendHomeMessage(); }
+}
+
+async function sendHomeMessage() {
+  const input    = $("home-input");
+  const text     = input.value.trim();
+  const freeMode = $("qa-world").checked;
+  if (!text) return;
+
+  // Hide welcome state on first message
+  const welcome = $("home-welcome");
+  if (welcome) welcome.style.display = "none";
+
+  ensureActiveChat();
+  clearErr("home-error");
+  conversationHistory.push({ role: "user", content: text });
+  homeAppendBubble("user", text);
+  persistCurrentChat();
+  input.value = "";
+  input.style.height = "auto";
+
+  // Loading state
+  const sendBtn = $("home-send-btn");
+  sendBtn.disabled = true;
+  $("home-spinner").style.display  = "inline-block";
+  $("home-send-icon").style.display = "none";
+
+  // Typing indicator
+  const typing = document.createElement("div");
+  typing.className = "home-typing";
+  typing.innerHTML = "<span></span><span></span><span></span>";
+  $("home-chat-area").appendChild(typing);
+  typing.scrollIntoView({ behavior: "smooth" });
+
+  try {
+    const res  = await fetch("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: conversationHistory, material: currentMaterial, free_mode: freeMode })
+    });
+    const data = await res.json();
+    typing.remove();
+    const answer = data.error ? `Error: ${data.error}` : data.answer;
+    conversationHistory.push({ role: "assistant", content: answer });
+    homeAppendBubble("assistant", answer, freeMode);
+    persistCurrentChat();
+  } catch {
+    typing.remove();
+    homeAppendBubble("assistant", "Could not reach the server. Make sure app.py is running.");
+  } finally {
+    sendBtn.disabled = false;
+    $("home-spinner").style.display  = "none";
+    $("home-send-icon").style.display = "inline";
+    $("home-input").focus();
+  }
+}
+
+function homeAppendBubble(role, text, freeMode, skipPersist) {
+  const area = $("home-chat-area");
+  const b    = document.createElement("div");
+  b.className = `home-bubble home-bubble-${role}`;
+
+  if (role === "user") {
+    b.textContent = text;
+  } else {
+    // Render content (text + optional chart) — streams unless replaying history
+    const content = document.createElement("div");
+    renderMessageContent(content, text, { instant: !!skipPersist });
+    b.appendChild(content);
+
+    // Bottom meta row: tag + copy
+    const meta = document.createElement("div");
+    meta.className = "home-bubble-meta";
+
+    const tag = document.createElement("span");
+    tag.className = "home-bubble-tag";
+    tag.textContent = freeMode ? "World Knowledge" : (currentMaterial ? "Material context" : "General");
+
+    const cpBtn = document.createElement("button");
+    cpBtn.className = "btn-outline";
+    cpBtn.style.fontSize = "0.72rem";
+    cpBtn.style.padding  = "0.25rem 0.55rem";
+    cpBtn.textContent = "⎘ Copy";
+    cpBtn.onclick = () => copyRaw(text, cpBtn);
+
+    meta.appendChild(tag);
+    meta.appendChild(cpBtn);
+    b.appendChild(meta);
+  }
+
+  area.appendChild(b);
+  b.scrollIntoView({ behavior: "smooth" });
+}
+
+/* ── System note (file loaded etc.) ────────────── */
+function homeSystemNote(msg) {
+  const area = $("home-chat-area");
+  const note = document.createElement("div");
+  note.className = "home-sys-note";
+  note.textContent = msg;
+  area.appendChild(note);
+  note.scrollIntoView({ behavior: "smooth" });
+  // Hide welcome if visible
+  const w = $("home-welcome");
+  if (w) w.style.display = "none";
+}
+
+/* ── File upload (Home) ─────────────────────────── */
+async function handleHomeFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const fd = new FormData();
+  fd.append("file", file);
+  homeSystemNote(`📎 Reading ${file.name}…`);
+
+  try {
+    const res  = await fetch("/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.error) { showErr("home-error", data.error); return; }
+
+    currentMaterial = data.text;
+    fetch("/reset-model", { method: "POST" });
+
+    // Show badge + system note
+    $("home-badge-name").textContent = file.name;
+    $("home-file-badge").classList.add("show");
+
+    // Replace the "reading" note with a success note
+    const notes = document.querySelectorAll(".home-sys-note");
+    if (notes.length) notes[notes.length - 1].textContent = `📎 ${file.name} loaded as context — ask your question below.`;
+
+  } catch { showErr("home-error", "Could not read file."); }
+  finally { input.value = ""; $("home-input").focus(); }
+}
+
+function clearHomeFile() {
+  currentMaterial = "";
+  $("home-file-badge").classList.remove("show");
+  $("home-badge-name").textContent = "";
+}
+
+/* ══════════════════════════════════════════════════
+   CAMERA (shared modal, target-aware)
+══════════════════════════════════════════════════ */
+async function openHomeCamera() {
+  cameraTarget = "home";
+  await _openCamera("home-error");
+}
+async function openCamera() {
+  cameraTarget = "notes";
+  await _openCamera("gen-error");
+}
+async function _openCamera(errId) {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    $("camera-video").srcObject = cameraStream;
+    $("camera-modal").classList.add("show");
+  } catch {
+    showErr(errId, "Camera access denied or not available.");
+  }
+}
+function closeCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  $("camera-modal").classList.remove("show");
+}
+async function capturePhoto() {
+  const video  = $("camera-video");
+  const canvas = $("camera-canvas");
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  closeCamera();
+
+  canvas.toBlob(async blob => {
+    const fd = new FormData();
+    fd.append("file", blob, "camera.jpg");
+
+    if (cameraTarget === "home") {
+      homeSystemNote("📷 Extracting text from photo…");
+      try {
+        const res  = await fetch("/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.error) { showErr("home-error", data.error); return; }
+        // Put into home textarea
+        $("home-input").value += (($("home-input").value ? "\n\n" : "") + data.text);
+        autoResize($("home-input"));
+        const notes = document.querySelectorAll(".home-sys-note");
+        if (notes.length) notes[notes.length-1].textContent = "📷 Photo text extracted — edit or send below.";
+      } catch { showErr("home-error", "Failed to process photo."); }
+      $("home-input").focus();
+    } else {
+      // Notes section camera
+      const btn = document.querySelector('.input-tool-btn[onclick="openCamera()"]');
+      if (btn) btn.textContent = "⏳ Extracting…";
+      try {
+        const res  = await fetch("/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.error) { showErr("gen-error", data.error); return; }
+        $("material").value += (($("material").value ? "\n\n" : "") + data.text);
+        autoResize($("material"));
+      } catch { showErr("gen-error", "Failed to process photo."); }
+      finally { if (btn) btn.textContent = "📷 Camera"; }
+    }
+  }, "image/jpeg", 0.92);
+}
+
+/* ══════════════════════════════════════════════════
+   AUDIO RECORDING (Home)
+══════════════════════════════════════════════════ */
+async function toggleHomeRecording() {
+  const btn = $("home-audio-btn");
+  if (mediaRecorder && homeRecording && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks  = [];
+    homeRecording = true;
+    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      homeRecording = false;
+      btn.classList.remove("recording");
+      btn.title = "Voice input";
+      homeSystemNote("🎙 Transcribing…");
+      const blob = new Blob(audioChunks, { type: "audio/webm" });
+      const fd   = new FormData();
+      fd.append("audio", blob, "recording.webm");
+      try {
+        const res  = await fetch("/transcribe", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.error) { showErr("home-error", data.error); return; }
+        $("home-input").value += (($("home-input").value ? "\n" : "") + data.text);
+        autoResize($("home-input"));
+        const notes = document.querySelectorAll(".home-sys-note");
+        if (notes.length) notes[notes.length-1].textContent = "🎙 Voice transcribed — edit or send below.";
+      } catch { showErr("home-error", "Transcription failed."); }
+      $("home-input").focus();
+    };
+    mediaRecorder.start();
+    btn.classList.add("recording");
+    btn.title = "Stop recording";
+  } catch { showErr("home-error", "Microphone access denied."); }
+}
+
+/* ══════════════════════════════════════════════════
+   NOTES & Q&A — file + audio (unchanged)
+══════════════════════════════════════════════════ */
+async function handleFileUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const btn = $("file-btn");
+  btn.textContent = "⏳ Reading…"; btn.disabled = true;
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const res  = await fetch("/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.error) { showErr("gen-error", data.error); return; }
+    $("material").value = data.text;
+    autoResize($("material"));
+    $("file-badge-name").textContent = file.name;
+    $("file-badge").classList.add("show");
+    btn.classList.add("active-upload");
+  } catch { showErr("gen-error", "Could not read file."); }
+  finally { btn.textContent = "📎 File"; btn.disabled = false; input.value = ""; }
+}
+function clearFile() {
+  $("file-badge").classList.remove("show");
+  $("file-btn").classList.remove("active-upload");
+}
+
+async function toggleRecording() {
+  const btn = $("audio-btn");
+  if (mediaRecorder && !homeRecording && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    homeRecording = false;
+    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      btn.textContent = "⏳ Transcribing…"; btn.classList.remove("recording");
+      const blob = new Blob(audioChunks, { type: "audio/webm" });
+      const fd   = new FormData();
+      fd.append("audio", blob, "recording.webm");
+      try {
+        const res  = await fetch("/transcribe", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.error) { showErr("gen-error", data.error); return; }
+        $("material").value += (($("material").value ? "\n\n" : "") + data.text);
+        autoResize($("material"));
+      } catch { showErr("gen-error", "Transcription failed."); }
+      finally { btn.textContent = "🎙 Voice"; }
+    };
+    mediaRecorder.start();
+    btn.textContent = "⏹ Stop"; btn.classList.add("recording");
+  } catch { showErr("gen-error", "Microphone access denied."); }
+}
+
+/* ══════════════════════════════════════════════════
+   GENERATE NOTES + FLASHCARDS
+══════════════════════════════════════════════════ */
+async function generate() {
+  clearErr("gen-error");
+  const material = $("material").value.trim();
+  if (!material) { showErr("gen-error", "Add some material first."); return; }
+  currentMaterial = material;
+  conversationHistory = [];
+  fetch("/reset-model", { method: "POST" });
+  $("chat-messages").innerHTML = '<div class="chat-empty-msg">Ask questions about your newly generated notes!</div>';
+  const btn = $("gen-btn");
+  btn.disabled = true; btn.classList.add("loading");
+  showSkeleton("notes-body", 7);
+  $("notes-output").classList.add("show");
+  try {
+    const res  = await fetch("/generate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ material })
+    });
+    const data = await res.json();
+    if (data.error) { showErr("gen-error", data.error); return; }
+    $("notes-body").innerHTML = renderBold(data.notes);
+    loadDeck(data.flashcards);
+  } catch { showErr("gen-error", "Server unreachable. Is app.py running?"); }
+  finally { btn.disabled = false; btn.classList.remove("loading"); }
+}
+
+/* ══════════════════════════════════════════════════
+   RESTYLE NOTES
+══════════════════════════════════════════════════ */
+async function restyleNotes() {
+  if (!currentMaterial) return;
+  const btn = $("restyle-btn");
+  btn.disabled = true; btn.classList.add("loading");
+  showSkeleton("notes-body", 5);
+  try {
+    const res  = await fetch("/regenerate-notes", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ material: currentMaterial, style_hint: $("notes-style").value.trim() })
+    });
+    const data = await res.json();
+    if (data.error) { showErr("gen-error", data.error); return; }
+    $("notes-body").innerHTML = renderBold(data.notes);
+  } catch { showErr("gen-error", "Could not reach server."); }
+  finally { btn.disabled = false; btn.classList.remove("loading"); }
+}
+
+/* ══════════════════════════════════════════════════
+   NOTES Q&A CHAT (separate display from Home chat)
+══════════════════════════════════════════════════ */
+function onChatKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+async function sendMessage() {
+  const input    = $("chat-input");
+  const text     = input.value.trim();
+  const freeMode = $("qa-world").checked;
+  if (!text) return;
+  $("chat-empty") && ($("chat-empty").style.display = "none");
+  conversationHistory.push({ role: "user", content: text });
+  appendBubble("user", text);
+  input.value = ""; input.style.height = "auto";
+  $("send-btn").disabled = true;
+  $("send-spinner").style.display = "inline-block";
+  $("send-icon").style.display = "none";
+  const typing = document.createElement("div");
+  typing.className = "typing-indicator";
+  typing.innerHTML = "<span></span><span></span><span></span>";
+  $("chat-messages").appendChild(typing);
+  typing.scrollIntoView({ behavior: "smooth" });
+  try {
+    const res  = await fetch("/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: conversationHistory, material: currentMaterial, free_mode: freeMode })
+    });
+    const data = await res.json();
+    typing.remove();
+    const answer = data.error ? `Error: ${data.error}` : data.answer;
+    conversationHistory.push({ role: "assistant", content: answer });
+    appendBubble("assistant", answer, freeMode);
+  } catch {
+    typing.remove();
+    appendBubble("assistant", "Could not reach the server.");
+  } finally {
+    $("send-btn").disabled = false;
+    $("send-spinner").style.display = "none";
+    $("send-icon").style.display = "inline";
+  }
+}
+
+function appendBubble(role, text, freeMode) {
+  const messages = $("chat-messages");
+  const b = document.createElement("div");
+  b.className = `bubble ${role}`;
+  if (role === "assistant") {
+    const content = document.createElement("div");
+    renderMessageContent(content, text);
+    b.appendChild(content);
+    const tag = document.createElement("span");
+    tag.className = "bubble-tag";
+    tag.textContent = freeMode ? "World Knowledge" : (currentMaterial ? "Material context" : "General");
+    const cpBtn = document.createElement("button");
+    cpBtn.className = "btn-outline bubble-copy";
+    cpBtn.textContent = "⎘ Copy";
+    cpBtn.onclick = () => copyRaw(text, cpBtn);
+    b.appendChild(tag); b.appendChild(cpBtn);
+  } else {
+    b.textContent = text;
+  }
+  messages.appendChild(b);
+  b.scrollIntoView({ behavior: "smooth" });
+}
+
+/* ══════════════════════════════════════════════════
+   FLASHCARD DECK
+══════════════════════════════════════════════════ */
+let deck=[], order=[], fcIdx=0;
+
+function loadDeck(cards) { deck=cards; fcIdx=0; applyOrder(); renderCard(); updateDeckMeta(); }
+function applyOrder() {
+  order = deck.map((_,i)=>i);
+  if ($("fc-shuffle").checked) {
+    for (let i=order.length-1;i>0;i--) {
+      const j=Math.floor(Math.random()*(i+1));
+      [order[i],order[j]]=[order[j],order[i]];
+    }
+  }
+}
+function renderCard() {
+  if (!deck.length) {
+    $("fc-question").innerHTML="No cards yet — generate from Notes &amp; Q&amp;A or add one below.";
+    $("fc-answer").textContent="—"; $("fc-counter").textContent="0 / 0";
+    $("fc-progress").style.width="0%";
+    $("fc-prev").disabled=$("fc-next").disabled=true; return;
+  }
+  const card=deck[order[fcIdx]];
+  $("fc-question").textContent=card.question; $("fc-answer").textContent=card.answer;
+  $("fc-counter").textContent=`${fcIdx+1} / ${deck.length}`;
+  $("fc-progress").style.width=`${((fcIdx+1)/deck.length)*100}%`;
+  $("fc-card").classList.remove("flipped");
+  $("fc-prev").disabled=fcIdx===0; $("fc-next").disabled=fcIdx===deck.length-1;
+  resetDeleteBtn();
+}
+function updateDeckMeta() { $("fc-deck-sub").textContent=`${deck.length} card${deck.length!==1?"s":""} in deck`; }
+function flipCard() { $("fc-card").classList.toggle("flipped"); }
+function fcMove(dir) {
+  if (dir>0&&fcIdx>=deck.length-1) return;
+  if (dir<0&&fcIdx<=0) return;
+  const s=$("fc-stage"); s.classList.remove("slide-r","slide-l");
+  void s.offsetWidth; s.classList.add(dir>0?"slide-r":"slide-l");
+  fcIdx+=dir; renderCard();
+}
+function toggleShuffle() { fcIdx=0; applyOrder(); renderCard(); }
+function promptDelete() {
+  $("fc-delete-wrap").innerHTML=`<div class="fc-confirm-row">Delete card?
+    <button class="fc-yes-btn" onclick="confirmDelete()">Yes</button>
+    <button class="fc-no-btn" onclick="resetDeleteBtn()">No</button></div>`;
+}
+function resetDeleteBtn() {
+  $("fc-delete-wrap").innerHTML=`<button class="fc-btn danger-btn" onclick="promptDelete()">✕ Delete</button>`;
+}
+function confirmDelete() {
+  if (!deck.length) return;
+  deck.splice(order[fcIdx],1); fcIdx=Math.min(fcIdx,Math.max(0,deck.length-1));
+  applyOrder(); renderCard(); updateDeckMeta();
+}
+function addCard() {
+  const q=$("fc-new-q").value.trim(), a=$("fc-new-a").value.trim();
+  if (!q||!a) return;
+  deck.push({question:q,answer:a});
+  $("fc-new-q").value=""; $("fc-new-a").value="";
+  applyOrder();
+  const pos=order.indexOf(deck.length-1);
+  fcIdx=pos!==-1?pos:deck.length-1;
+  renderCard(); updateDeckMeta();
+}
+
+/* Keyboard shortcuts */
+document.addEventListener("keydown", e => {
+  if (currentSection!=="flashcards") return;
+  if (["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+  if (e.key==="ArrowRight") { e.preventDefault(); fcMove(1); }
+  if (e.key==="ArrowLeft")  { e.preventDefault(); fcMove(-1); }
+  if (e.key===" ")          { e.preventDefault(); flipCard(); }
+});
+
+/* Auto-focus home input + init chat history on load */
+window.addEventListener("load", () => {
+  loadChats();
+  renderChatHistory();
+  // Restore active chat if present
+  const chat = currentChat();
+  if (chat && chat.messages.length) {
+    conversationHistory = chat.messages;
+    rebuildHomeChatUI();
+  }
+  setTimeout(() => $("home-input")?.focus(), 100);
+});
+</script>
+</body>
+</html>
