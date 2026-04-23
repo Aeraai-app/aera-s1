@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  {% if clerk_key %}<script defer src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="{{ clerk_key }}"></script>{% endif %}
 </head>
 <body>
 
@@ -50,6 +51,36 @@
   </nav>
 
   <div class="sidebar-footer">
+    <!-- Auth section -->
+    <div class="auth-section" id="auth-section">
+      <!-- Signed out state -->
+      <button class="auth-signin-btn" id="auth-signin-btn" onclick="openSignIn()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        <span>Sign in</span>
+      </button>
+      <!-- Signed in state (hidden by default) -->
+      <div class="auth-user" id="auth-user" style="display:none">
+        <img class="auth-avatar" id="auth-avatar" src="" alt="" />
+        <div class="auth-user-info">
+          <div class="auth-user-name" id="auth-user-name"></div>
+          <div class="auth-user-email" id="auth-user-email"></div>
+        </div>
+        <button class="auth-menu-btn" id="auth-menu-btn" onclick="toggleAuthMenu()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
+        <div class="auth-dropdown" id="auth-dropdown">
+          <button class="auth-dropdown-item" onclick="openProfile()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Profile
+          </button>
+          <button class="auth-dropdown-item" onclick="signOut()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+
     <label class="world-toggle">
       <input type="checkbox" id="qa-world" onchange="onWorldToggle()" />
       <span class="toggle-track"></span>
@@ -62,6 +93,17 @@
     </button>
   </div>
 </aside>
+
+<!-- Auth overlay (sign-in / sign-up / profile) -->
+<div class="auth-overlay" id="auth-overlay" style="display:none">
+  <div class="auth-overlay-backdrop" onclick="closeAuthOverlay()"></div>
+  <div class="auth-overlay-card">
+    <button class="auth-overlay-close" onclick="closeAuthOverlay()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div id="clerk-mount"></div>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════════════════
      MAIN
@@ -1642,6 +1684,83 @@ document.addEventListener("keydown", e => {
   if (e.key===" ")          { e.preventDefault(); flipCard(); }
 });
 
+/* ── Clerk Authentication ─────────────────────────── */
+const _clerkAppearance = {
+  variables: {
+    colorPrimary: "#8b7cf6",
+    colorBackground: getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#222222",
+    colorInputBackground: getComputedStyle(document.documentElement).getPropertyValue("--surface-hi").trim() || "#2c2c2c",
+    colorText: getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#ececec",
+    colorTextSecondary: getComputedStyle(document.documentElement).getPropertyValue("--text-dim").trim() || "#a8a8a8",
+    borderRadius: "0.65rem",
+    fontFamily: "Inter, sans-serif"
+  }
+};
+
+function _updateAuthUI(user) {
+  const signInBtn = $("auth-signin-btn");
+  const userEl    = $("auth-user");
+  if (user) {
+    signInBtn.style.display = "none";
+    userEl.style.display = "flex";
+    $("auth-avatar").src = user.imageUrl || "";
+    $("auth-user-name").textContent = user.fullName || user.firstName || "User";
+    $("auth-user-email").textContent = user.primaryEmailAddress?.emailAddress || "";
+  } else {
+    signInBtn.style.display = "flex";
+    userEl.style.display = "none";
+  }
+}
+
+function openSignIn() {
+  if (!window.Clerk) return;
+  $("auth-overlay").style.display = "flex";
+  window.Clerk.mountSignIn($("clerk-mount"), { appearance: _clerkAppearance });
+}
+
+function openProfile() {
+  if (!window.Clerk) return;
+  closeAuthDropdown();
+  $("auth-overlay").style.display = "flex";
+  $("clerk-mount").innerHTML = "";
+  window.Clerk.mountUserProfile($("clerk-mount"), { appearance: _clerkAppearance });
+}
+
+function closeAuthOverlay() {
+  $("auth-overlay").style.display = "none";
+  try { window.Clerk.unmountSignIn($("clerk-mount")); } catch {}
+  try { window.Clerk.unmountUserProfile($("clerk-mount")); } catch {}
+  $("clerk-mount").innerHTML = "";
+}
+
+function toggleAuthMenu() {
+  const dd = $("auth-dropdown");
+  dd.classList.toggle("open");
+  if (dd.classList.contains("open")) {
+    const close = (e) => { if (!dd.contains(e.target) && e.target !== $("auth-menu-btn")) { dd.classList.remove("open"); document.removeEventListener("click", close); } };
+    setTimeout(() => document.addEventListener("click", close), 0);
+  }
+}
+function closeAuthDropdown() { $("auth-dropdown").classList.remove("open"); }
+
+async function signOut() {
+  closeAuthDropdown();
+  if (window.Clerk) await window.Clerk.signOut();
+  _updateAuthUI(null);
+}
+
+async function _initClerk() {
+  if (!window.Clerk) return;
+  try {
+    await window.Clerk.load({ appearance: _clerkAppearance });
+    _updateAuthUI(window.Clerk.user);
+    window.Clerk.addListener(({ user }) => {
+      _updateAuthUI(user);
+      if (user) closeAuthOverlay();
+    });
+  } catch (e) { console.warn("Clerk init:", e); }
+}
+
 /* Auto-focus home input + init chat history on load */
 window.addEventListener("load", () => {
   loadChats();
@@ -1653,6 +1772,7 @@ window.addEventListener("load", () => {
     rebuildHomeChatUI();
   }
   setTimeout(() => $("home-input")?.focus(), 100);
+  _initClerk();
 });
 </script>
 </body>

@@ -2,3 +2,4 @@ flask
 groq
 pypdf
 python-dotenv
+PyJWT[crypto]

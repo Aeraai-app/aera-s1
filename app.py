@@ -3,16 +3,54 @@ Aera S1 — AI Study Companion
 Backend: notes, flashcards, adaptive tutor Q&A, file/image/audio ingestion.
 """
 
-import os, io, json, re, base64, tempfile, webbrowser, threading
+import os, io, json, re, base64, tempfile, webbrowser, threading, functools
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, jsonify
 from groq import Groq
+import jwt
+from jwt import PyJWKClient
 
 app = Flask(__name__)
 
 MODEL        = "llama-3.3-70b-versatile"
 VISION_MODEL = "llama-3.2-11b-vision-preview"
 AUDIO_MODEL  = "whisper-large-v3-turbo"
+
+
+CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
+CLERK_ISSUER          = os.environ.get("CLERK_ISSUER", "")  # e.g. https://your-app.clerk.accounts.dev
+
+_jwks_client = None
+def _get_jwks_client():
+    global _jwks_client
+    if _jwks_client is None and CLERK_ISSUER:
+        _jwks_client = PyJWKClient(f"{CLERK_ISSUER}/.well-known/jwks.json")
+    return _jwks_client
+
+def verify_clerk_token(token):
+    """Verify a Clerk session JWT. Returns claims dict or None."""
+    client = _get_jwks_client()
+    if not client:
+        return None
+    try:
+        key = client.get_signing_key_from_jwt(token)
+        return jwt.decode(token, key.key, algorithms=["RS256"],
+                          options={"verify_aud": False})
+    except Exception:
+        return None
+
+def auth_required(f):
+    """Decorator — returns 401 if no valid Clerk session token."""
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        header = request.headers.get("Authorization", "")
+        token = header.replace("Bearer ", "") if header.startswith("Bearer ") else ""
+        claims = verify_clerk_token(token) if token else None
+        if not claims:
+            return jsonify({"error": "Authentication required"}), 401
+        request.clerk_user = claims
+        return f(*args, **kwargs)
+    return wrapped
 
 
 def get_client():
@@ -1243,7 +1281,7 @@ def build_system_prompt(material: str, free_mode: bool) -> str:
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", clerk_key=CLERK_PUBLISHABLE_KEY)
 
 
 @app.route("/generate", methods=["POST"])
