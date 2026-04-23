@@ -642,6 +642,11 @@ function parseChartBlock(text) {
   const type = match[1].trim().toLowerCase();
   const body = match[2];
 
+  const xAxisMatch = body.match(/X-axis:\s*(.+)/i);
+  const yAxisMatch = body.match(/Y-axis:\s*(.+)/i);
+  const xLabel = xAxisMatch ? xAxisMatch[1].trim() : null;
+  const yLabel = yAxisMatch ? yAxisMatch[1].trim() : null;
+
   const xyPoints = [...body.matchAll(/\(\s*([+-]?[\d.]+)\s*,\s*([+-]?[\d.]+)\s*\)/g)]
     .map(m => ({ x: parseFloat(m[1]), y: parseFloat(m[2]) }));
 
@@ -649,52 +654,236 @@ function parseChartBlock(text) {
     .filter(m => !/(axis|chart type|categories|data)/i.test(m[1]))
     .map(m => ({ label: m[1].trim(), value: parseFloat(m[2]) }));
 
-  return { raw, type, catPoints, xyPoints };
+  return { raw, type, catPoints, xyPoints, xLabel, yLabel };
 }
 
 /**
  * Build a Chart.js config from extracted data.
  */
-function buildChart(canvas, type, catPoints, xyPoints) {
+function buildChart(canvas, type, catPoints, xyPoints, xLabel, yLabel) {
   const textColor = _themeCol("--text-dim", "#a8a8a8");
   const gridColor = _themeCol("--border", "rgba(128,128,128,0.15)");
   const accent    = _themeCol("--accent", "#8b7cf6");
   const palette   = getChartColors();
-  const opts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: textColor, font: { family: "Inter, sans-serif", size: 11 } } } }
+
+  const tooltipStyle = {
+    backgroundColor: "rgba(15,15,15,0.92)", titleColor: "#fff", bodyColor: "#ddd",
+    cornerRadius: 8, padding: 10, displayColors: true, boxPadding: 4,
+    bodyFont: { family: "Inter, sans-serif", size: 12 },
+    titleFont: { family: "Inter, sans-serif", size: 12, weight: 600 }
   };
-  const tickColor = textColor;
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { intersect: false, mode: "nearest" },
+    plugins: {
+      legend: { labels: { color: textColor, font: { family: "Inter, sans-serif", size: 11 } } },
+      tooltip: tooltipStyle
+    }
+  };
+  const mkScale = (label, extra) => ({
+    grid: { color: gridColor, drawBorder: false },
+    ticks: { color: textColor, font: { family: "Inter, sans-serif", size: 11 } },
+    ...(label ? { title: { display: true, text: label, color: textColor, font: { family: "Inter, sans-serif", size: 12 } } } : {}),
+    ...extra
+  });
 
   if (type === "pie" && catPoints.length) {
     return new Chart(canvas, {
       type: "pie",
-      data: { labels: catPoints.map(p=>p.label), datasets: [{ data: catPoints.map(p=>p.value), backgroundColor: palette.slice(0, catPoints.length), borderWidth: 0 }] },
-      options: opts
+      data: { labels: catPoints.map(p=>p.label), datasets: [{ data: catPoints.map(p=>p.value), backgroundColor: palette.slice(0, catPoints.length), borderWidth: 0, hoverOffset: 8 }] },
+      options: { ...baseOpts, plugins: { ...baseOpts.plugins, tooltip: { ...tooltipStyle, callbacks: { label: ctx => ctx.label + ": " + ctx.parsed + "%" } } } }
     });
   }
   if (type === "bar" && catPoints.length) {
     return new Chart(canvas, {
       type: "bar",
       data: { labels: catPoints.map(p=>p.label), datasets: [{ label: "Value", data: catPoints.map(p=>p.value), backgroundColor: palette.slice(0, catPoints.length), borderRadius: 6, borderSkipped: false }] },
-      options: { ...opts, scales: { x: { grid:{color:gridColor, display:false}, ticks:{color:tickColor} }, y: { grid:{color:gridColor}, ticks:{color:tickColor} } }, plugins: { legend: { display: false } } }
+      options: { ...baseOpts, scales: { x: mkScale(xLabel, { display: true }), y: mkScale(yLabel) }, plugins: { ...baseOpts.plugins, legend: { display: false } } }
     });
   }
   if (type === "line" && xyPoints.length) {
     return new Chart(canvas, {
       type: "line",
-      data: { datasets: [{ label: "Value", data: xyPoints, borderColor: accent, backgroundColor: accent+"22", tension: 0.35, fill: true, pointRadius: 3, pointBackgroundColor: accent, borderWidth: 2 }] },
-      options: { ...opts, scales: { x: { type:"linear", grid:{color:gridColor}, ticks:{color:tickColor} }, y: { grid:{color:gridColor}, ticks:{color:tickColor} } } }
+      data: { datasets: [{ label: yLabel || "Value", data: xyPoints, borderColor: accent, backgroundColor: accent + "18", tension: 0.4, fill: true, pointRadius: 3, pointHoverRadius: 7, pointBackgroundColor: accent, pointHoverBackgroundColor: accent, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2, borderWidth: 2.5 }] },
+      options: { ...baseOpts, scales: { x: mkScale(xLabel, { type: "linear" }), y: mkScale(yLabel) } }
     });
   }
   if (type === "scatter" && xyPoints.length) {
     return new Chart(canvas, {
       type: "scatter",
-      data: { datasets: [{ label: "Value", data: xyPoints, backgroundColor: accent, pointRadius: 5 }] },
-      options: { ...opts, scales: { x: { type:"linear", grid:{color:gridColor}, ticks:{color:tickColor} }, y: { grid:{color:gridColor}, ticks:{color:tickColor} } } }
+      data: { datasets: [{ label: yLabel || "Value", data: xyPoints, backgroundColor: accent, pointRadius: 5, pointHoverRadius: 8, pointHoverBackgroundColor: accent, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
+      options: { ...baseOpts, scales: { x: mkScale(xLabel, { type: "linear" }), y: mkScale(yLabel) } }
     });
   }
   return null;
+}
+
+/* ── Interactive chart (formula + sliders) ─────────── */
+
+function _evalFormula(formula, vars) {
+  let expr = formula.replace(/\^/g, "**");
+  expr = expr.replace(/\bpi\b/g, "Math.PI");
+  expr = expr.replace(/\be\b(?!\w)/g, "Math.E");
+  expr = expr.replace(/\b(sin|cos|tan|asin|acos|atan|sqrt|abs|log|log10|exp|ceil|floor)\s*\(/g, "Math.$1(");
+  const names = Object.keys(vars);
+  const vals  = Object.values(vars);
+  try { return new Function(...names, "return " + expr)(...vals); }
+  catch { return NaN; }
+}
+
+function _smartNum(v) {
+  if (!isFinite(v)) return "—";
+  if (Math.abs(v) >= 1e6 || (Math.abs(v) < 0.01 && v !== 0)) return v.toExponential(3);
+  if (Number.isInteger(v)) return v.toString();
+  return parseFloat(v.toPrecision(4)).toString();
+}
+
+function parseInteractiveChart(text) {
+  const match = text.match(/Interactive Chart\s*\n((?:\s*(?:Title|X-var|X-label|X-min|X-max|Y-label|Formula|Constant|Slider):.*\n?)+)/i);
+  if (!match) return null;
+  const raw  = match[0];
+  const body = match[1];
+  const get = key => { const m = body.match(new RegExp("^\\s*" + key + ":\\s*(.+)", "im")); return m ? m[1].trim() : null; };
+
+  const title   = get("Title");
+  const xVar    = get("X-var");
+  const xLabel  = get("X-label");
+  const xMin    = parseFloat(get("X-min") || "0");
+  const xMax    = parseFloat(get("X-max") || "10");
+  const yLabel  = get("Y-label");
+  const formula = get("Formula");
+  if (!formula || !xVar) return null;
+
+  const constants = {};
+  for (const m of body.matchAll(/^\s*Constant:\s*(\w+)\s*=\s*([^\n]+)/gim))
+    constants[m[1].trim()] = parseFloat(m[2].trim());
+
+  const sliders = [];
+  for (const m of body.matchAll(/^\s*Slider:\s*(\w+)\s*=\s*([^\s|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^\n]+)/gim))
+    sliders.push({ name: m[1].trim(), defaultVal: parseFloat(m[2]), label: m[3].trim(),
+                   min: parseFloat(m[4]), max: parseFloat(m[5]), step: parseFloat(m[6]) });
+
+  return { raw, title, xVar, xLabel, xMin, xMax, yLabel, formula, constants, sliders };
+}
+
+function buildInteractiveChart(host, cfg) {
+  const wrap = document.createElement("div");
+  wrap.className = "interactive-chart-wrap";
+
+  if (cfg.title) {
+    const t = document.createElement("div");
+    t.className = "chart-title";
+    t.textContent = cfg.title;
+    wrap.appendChild(t);
+  }
+
+  const canvasWrap = document.createElement("div");
+  canvasWrap.className = "chart-canvas-wrap";
+  const canvas = document.createElement("canvas");
+  canvasWrap.appendChild(canvas);
+  wrap.appendChild(canvasWrap);
+
+  /* Slider state */
+  const vals = { ...cfg.constants };
+  const sliderWrap = document.createElement("div");
+  sliderWrap.className = "chart-sliders";
+
+  for (const s of cfg.sliders) {
+    vals[s.name] = s.defaultVal;
+    const grp = document.createElement("div");
+    grp.className = "chart-slider-group";
+
+    const lbl = document.createElement("label");
+    lbl.className = "chart-slider-label";
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = s.label;
+    const valSpan = document.createElement("span");
+    valSpan.className = "chart-slider-value";
+    valSpan.textContent = _smartNum(s.defaultVal);
+    lbl.appendChild(nameSpan);
+    lbl.appendChild(valSpan);
+
+    const inp = document.createElement("input");
+    inp.type = "range"; inp.className = "chart-slider";
+    inp.min = s.min; inp.max = s.max; inp.step = s.step; inp.value = s.defaultVal;
+    inp.addEventListener("input", () => {
+      vals[s.name] = parseFloat(inp.value);
+      valSpan.textContent = _smartNum(parseFloat(inp.value));
+      refresh();
+    });
+
+    grp.appendChild(lbl);
+    grp.appendChild(inp);
+    sliderWrap.appendChild(grp);
+  }
+  wrap.appendChild(sliderWrap);
+  host.appendChild(wrap);
+
+  /* Generate curve points */
+  function points() {
+    const pts = [], n = 250, step = (cfg.xMax - cfg.xMin) / n;
+    for (let i = 0; i <= n; i++) {
+      const x = cfg.xMin + i * step;
+      const y = _evalFormula(cfg.formula, { ...vals, [cfg.xVar]: x });
+      if (isFinite(y)) pts.push({ x, y });
+    }
+    return pts;
+  }
+
+  const accent    = _themeCol("--accent", "#8b7cf6");
+  const textColor = _themeCol("--text-dim", "#a8a8a8");
+  const gridColor = _themeCol("--border", "rgba(128,128,128,0.15)");
+
+  const chart = new Chart(canvas, {
+    type: "line",
+    data: { datasets: [{
+      data: points(),
+      borderColor: accent,
+      backgroundColor: accent + "18",
+      tension: 0.4, fill: true,
+      pointRadius: 0,
+      pointHoverRadius: 6,
+      pointHoverBackgroundColor: accent,
+      pointHoverBorderColor: "#fff",
+      pointHoverBorderWidth: 2,
+      borderWidth: 2.5
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 200 },
+      interaction: { intersect: false, mode: "index" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "rgba(15,15,15,0.92)", titleColor: "#fff", bodyColor: "#ddd",
+          cornerRadius: 8, padding: 10, displayColors: false,
+          bodyFont: { family: "Inter, sans-serif", size: 12 },
+          titleFont: { family: "Inter, sans-serif", size: 12, weight: 600 },
+          callbacks: {
+            title: items => (cfg.xLabel || cfg.xVar) + " = " + _smartNum(items[0].parsed.x),
+            label: item  => (cfg.yLabel || "y") + " = " + _smartNum(item.parsed.y)
+          }
+        }
+      },
+      scales: {
+        x: { type: "linear",
+          title: { display: !!cfg.xLabel, text: cfg.xLabel || "", color: textColor, font: { family: "Inter, sans-serif", size: 12 } },
+          grid: { color: gridColor, drawBorder: false },
+          ticks: { color: textColor, font: { family: "Inter, sans-serif", size: 11 } }
+        },
+        y: {
+          title: { display: !!cfg.yLabel, text: cfg.yLabel || "", color: textColor, font: { family: "Inter, sans-serif", size: 12 } },
+          grid: { color: gridColor, drawBorder: false },
+          ticks: { color: textColor, font: { family: "Inter, sans-serif", size: 11 } }
+        }
+      }
+    }
+  });
+
+  function refresh() {
+    chart.data.datasets[0].data = points();
+    chart.update("none");
+  }
 }
 
 /* ── Streaming typewriter helpers ───────────────────
@@ -741,16 +930,25 @@ function buildRenderPlan(text) {
   let remaining = text;
   let trailingChart = null;
 
+  // 0. Interactive chart block?
+  const interactive = parseInteractiveChart(remaining);
+  if (interactive) {
+    remaining = remaining.replace(interactive.raw, "").trim();
+    trailingChart = { kind: "interactive-chart", config: interactive };
+  }
+
   // 1. Explicit chart block?
-  const block = parseChartBlock(remaining);
-  if (block) {
-    const t = block.type.includes("pie") ? "pie"
-            : block.type.includes("bar") ? "bar"
-            : block.type.includes("line") ? "line"
-            : block.type.includes("scatter") ? "scatter" : null;
-    if (t && (block.catPoints.length || block.xyPoints.length)) {
-      remaining = remaining.replace(block.raw, "").trim();
-      trailingChart = { kind: "chart", chartType: t, catPoints: block.catPoints, xyPoints: block.xyPoints };
+  if (!trailingChart) {
+    const block = parseChartBlock(remaining);
+    if (block) {
+      const t = block.type.includes("pie") ? "pie"
+              : block.type.includes("bar") ? "bar"
+              : block.type.includes("line") ? "line"
+              : block.type.includes("scatter") ? "scatter" : null;
+      if (t && (block.catPoints.length || block.xyPoints.length)) {
+        remaining = remaining.replace(block.raw, "").trim();
+        trailingChart = { kind: "chart", chartType: t, catPoints: block.catPoints, xyPoints: block.xyPoints, xLabel: block.xLabel, yLabel: block.yLabel };
+      }
     }
   }
 
@@ -867,6 +1065,17 @@ async function renderMessageContent(container, text, opts = {}) {
         _scrollParentToBottom(container);
         if (!instant) await _sleep(80);
       }
+      else if (step.kind === "interactive-chart") {
+        const wrap = document.createElement("div");
+        if (cursor && cursor.parentNode === container) {
+          container.insertBefore(wrap, cursor);
+        } else {
+          container.appendChild(wrap);
+        }
+        buildInteractiveChart(wrap, step.config);
+        _scrollParentToBottom(container);
+        if (!instant) await _sleep(120);
+      }
       else if (step.kind === "chart") {
         const wrap = document.createElement("div");
         wrap.className = "chart-wrap";
@@ -877,7 +1086,7 @@ async function renderMessageContent(container, text, opts = {}) {
         } else {
           container.appendChild(wrap);
         }
-        buildChart(canvas, step.chartType, step.catPoints, step.xyPoints);
+        buildChart(canvas, step.chartType, step.catPoints, step.xyPoints, step.xLabel, step.yLabel);
         _scrollParentToBottom(container);
         if (!instant) await _sleep(120);
       }

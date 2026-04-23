@@ -769,6 +769,69 @@ Mandatory triggers — always output a structured chart block for:
   Category comparisons       →  Bar Chart
   Two-variable data          →  Scatter Plot
 
+── MODE 2b: INTERACTIVE CHART (for formula-driven graphs with sliders) ──
+
+When the concept involves a mathematical relationship between variables,
+output an interactive chart block. The app renders it as a real graph
+with sliders the student can drag to explore how variables affect the result.
+
+Format (every field on its own line, in this order):
+
+  Interactive Chart
+  Title: [descriptive title]
+  X-var: [variable name used in formula for the x-axis]
+  X-label: [human-readable x-axis label with units]
+  X-min: [number — minimum x value]
+  X-max: [number — maximum x value]
+  Y-label: [human-readable y-axis label with units]
+  Formula: [math expression using X-var and Slider variable names]
+  Constant: [name] = [value]          ← optional, repeat for each constant
+  Slider: [name] = [default] | [label] | [min] | [max] | [step]
+
+Example — gravitational force:
+
+  Interactive Chart
+  Title: Gravitational Force vs Distance
+  X-var: r
+  X-label: Distance (m)
+  X-min: 1
+  X-max: 50
+  Y-label: Gravitational Force (N)
+  Formula: G * m1 * m2 / (r ^ 2)
+  Constant: G = 6.674e-11
+  Slider: m1 = 1000 | Mass 1 (kg) | 1 | 10000 | 100
+  Slider: m2 = 1000 | Mass 2 (kg) | 1 | 10000 | 100
+
+Example — quadratic function:
+
+  Interactive Chart
+  Title: Quadratic Function
+  X-var: x
+  X-label: x
+  X-min: -10
+  X-max: 10
+  Y-label: f(x)
+  Formula: a * x ^ 2 + b * x + c
+  Slider: a = 1 | Coefficient a | -5 | 5 | 0.5
+  Slider: b = 0 | Coefficient b | -10 | 10 | 0.5
+  Slider: c = 0 | Coefficient c | -10 | 10 | 0.5
+
+Formula rules:
+  - Use * for ALL multiplication (never implicit). Write "2 * x" not "2x".
+  - Use ^ for exponents: "r ^ 2", "x ^ 3"
+  - Available functions: sin, cos, tan, sqrt, abs, log, exp, pi, e
+  - Variable names MUST match X-var and Slider names exactly (case-sensitive).
+  - Wrap function arguments in parentheses: "sin(x)", "sqrt(a ^ 2 + b ^ 2)"
+
+Mandatory triggers for Interactive Chart:
+  Physics formulas (F=ma, gravity, kinetic energy, Coulomb's law, etc.)
+  Math functions (quadratic, trig, exponential, logarithmic, etc.)
+  Any "graph of Y vs X" or "plot" request
+  Any request involving sliders, variable adjustment, or "what happens when..."
+  Economics curves (supply/demand, cost functions, etc.)
+
+Always prefer Interactive Chart over a static line/scatter chart when a formula exists.
+
 ── MODE 3: INLINE SVG (for high-quality diagrams) ──
 
 When a concept needs a proper diagram (biology, physics, flowcharts), generate clean inline SVG:
@@ -796,6 +859,7 @@ Good for: biological processes, physics diagrams, flowcharts, structures.
 
   Quick inline visual during explanation    → Mode 1 (text graph)
   Any real data with numbers                → Mode 2 (structured chart)
+  Formula/equation with adjustable variables → Mode 2b (interactive chart)
   Conceptual diagram or process flow        → Mode 3 (SVG)
   Combine modes when it helps understanding → e.g. structured chart + brief SVG diagram
 
