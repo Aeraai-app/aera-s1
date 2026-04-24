@@ -19,6 +19,7 @@ AUDIO_MODEL  = "whisper-large-v3-turbo"
 
 CLERK_PUBLISHABLE_KEY = os.environ.get("CLERK_PUBLISHABLE_KEY", "")
 CLERK_ISSUER          = os.environ.get("CLERK_ISSUER", "")  # e.g. https://your-app.clerk.accounts.dev
+CLERK_DOMAIN          = CLERK_ISSUER.replace("https://", "").replace("http://", "").rstrip("/") if CLERK_ISSUER else ""
 
 _jwks_client = None
 def _get_jwks_client():
@@ -1281,7 +1282,7 @@ def build_system_prompt(material: str, free_mode: bool) -> str:
 
 @app.route("/")
 def index():
-    return render_template("index.html", clerk_key=CLERK_PUBLISHABLE_KEY)
+    return render_template("index.html", clerk_key=CLERK_PUBLISHABLE_KEY, clerk_domain=CLERK_DOMAIN)
 
 
 @app.route("/generate", methods=["POST"])

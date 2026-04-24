@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  {% if clerk_key %}<script defer src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" data-clerk-publishable-key="{{ clerk_key }}"></script>{% endif %}
+  {% if clerk_key and clerk_domain %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://{{ clerk_domain }}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" type="text/javascript"></script>{% endif %}
 </head>
 <body>
 
@@ -1680,8 +1680,14 @@ function _updateAuthUI(user) {
   }
 }
 
+let _clerkReady = false;
+
 function handleAuthClick() {
-  if (!window.Clerk) return;
+  if (!_clerkReady) {
+    console.warn("Clerk not ready yet — retrying...");
+    _initClerk().then(() => { if (_clerkReady) handleAuthClick(); });
+    return;
+  }
   if (window.Clerk.user) {
     window.Clerk.openUserProfile({ appearance: _clerkTheme });
   } else {
@@ -1690,12 +1696,24 @@ function handleAuthClick() {
 }
 
 async function _initClerk() {
-  if (!window.Clerk) return;
+  if (_clerkReady) return;
+  /* Clerk script loads async — wait for it if needed */
+  if (typeof window.Clerk === "undefined") {
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 300));
+      if (typeof window.Clerk !== "undefined") break;
+    }
+  }
+  if (typeof window.Clerk === "undefined") {
+    console.warn("Clerk SDK did not load — sign-in unavailable");
+    return;
+  }
   try {
     await window.Clerk.load({ appearance: _clerkTheme });
+    _clerkReady = true;
     _updateAuthUI(window.Clerk.user);
     window.Clerk.addListener(({ user }) => _updateAuthUI(user));
-  } catch (e) { console.warn("Clerk init:", e); }
+  } catch (e) { console.error("Clerk init failed:", e); }
 }
 
 /* Auto-focus home input + init chat history on load */
