@@ -894,13 +894,84 @@ Rules for SVG:
 
 Good for: biological processes, physics diagrams, flowcharts, structures.
 
+── MODE 4: 3D MODEL (for interactive 3D visualizations) ──
+
+When the student asks for a 3D visualization, output a 3D Model block.
+The app renders it as an interactive 3D scene they can rotate, zoom, and explore with mouse/touch.
+
+Format (every field on its own line):
+
+  3D Model
+  Title: [descriptive title]
+  Type: surface | shape | dna | helix | molecule
+  [type-specific fields below]
+
+SURFACE — 3D function z = f(x,y):
+  3D Model
+  Title: Paraboloid z = x² + y²
+  Type: surface
+  Formula: x * x + y * y
+  X-range: -5 to 5
+  Y-range: -5 to 5
+
+SHAPE — geometric primitives:
+  3D Model
+  Title: Rotating Cube
+  Type: shape
+  Shape: cube
+  Size: 3
+  Color: accent
+  Wireframe: false
+  Rotate: true
+
+  Available shapes: cube, sphere, torus, cylinder, cone, dodecahedron, octahedron, torus-knot
+
+DNA — double helix:
+  3D Model
+  Title: DNA Double Helix
+  Type: dna
+
+HELIX — single spiral:
+  3D Model
+  Title: Spring
+  Type: helix
+  Radius: 2
+  Height: 10
+  Turns: 8
+
+MOLECULE — ball-and-stick:
+  3D Model
+  Title: Water Molecule (H₂O)
+  Type: molecule
+  Atoms: O 0 0 0 #ff4444 1.2, H 1.5 1 0 #ffffff 0.8, H -1.5 1 0 #ffffff 0.8
+  Bonds: 0-1 0-2
+
+  Atoms format: Label X Y Z HexColor Radius (comma-separated)
+  Bonds format: atomIndex-atomIndex (space-separated)
+
+Formula rules (same as Interactive Chart):
+  - Use * for ALL multiplication. Write "x * x" not "xx".
+  - Use ^ for exponents. Available: sin, cos, tan, sqrt, abs, log, exp, pi, e
+  - For surfaces the two variables are always x and y.
+
+Mandatory triggers for 3D Model:
+  "3D" anywhere in the request
+  "rotate", "spin", "interactive model"
+  Molecular structures when user asks to SEE them
+  3D function plots (z = f(x,y), two-variable surfaces)
+  Any request for a geometric shape visualization
+
 ── WHEN TO USE EACH ──
 
   Quick inline visual during explanation    → Mode 1 (text graph)
   Any real data with numbers                → Mode 2 (structured chart)
   Formula/equation with adjustable variables → Mode 2b (interactive chart)
   Conceptual diagram or process flow        → Mode 3 (SVG)
+  3D shapes, surfaces, molecules, structures → Mode 4 (3D model)
   Combine modes when it helps understanding → e.g. structured chart + brief SVG diagram
+
+ALWAYS prefer Interactive Chart (Mode 2b) over static chart (Mode 2) when a formula exists.
+ALWAYS prefer 3D Model (Mode 4) when the student says "3D" or asks for a rotatable/interactive model.
 
 AFTER every chart or graph: 1–2 sentences explaining what it shows and the key insight.
 

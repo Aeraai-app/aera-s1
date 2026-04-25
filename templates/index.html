@@ -8,6 +8,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"}}</script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    window.THREE = THREE;
+    window.THREE.OrbitControls = OrbitControls;
+  </script>
   {% if clerk_key and clerk_domain %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://{{ clerk_domain }}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" type="text/javascript"></script>{% endif %}
 </head>
 <body>
@@ -894,6 +901,186 @@ function buildInteractiveChart(host, cfg) {
   }
 }
 
+/* ── 3D Model (Three.js) ──────────────────────────── */
+
+function parse3DBlock(text) {
+  const match = text.match(/3D Model\s*\n((?:\s*(?:Title|Type|Formula|X-range|Y-range|Shape|Size|Color|Wireframe|Rotate|Radius|Height|Turns|Atoms|Bonds):.*\n?)+)/i);
+  if (!match) return null;
+  const raw = match[0], body = match[1];
+  const get = k => { const m = body.match(new RegExp("^\\s*" + k + ":\\s*(.+)", "im")); return m ? m[1].trim() : null; };
+  const cfg = {
+    raw, title: get("Title"), type: (get("Type") || "shape").toLowerCase(),
+    formula: get("Formula"), shape: (get("Shape") || "cube").toLowerCase(),
+    size: parseFloat(get("Size") || "3"), color: get("Color") || "accent",
+    wireframe: (get("Wireframe") || "").toLowerCase() === "true",
+    rotate: (get("Rotate") || "true").toLowerCase() !== "false",
+    radius: parseFloat(get("Radius") || "2"), height: parseFloat(get("Height") || "10"),
+    turns: parseFloat(get("Turns") || "8"), atoms: get("Atoms"), bonds: get("Bonds")
+  };
+  const xr = get("X-range"), yr = get("Y-range");
+  if (xr) { const m = xr.match(/([+-]?[\d.]+)\s*to\s*([+-]?[\d.]+)/); if (m) cfg.xRange = [+m[1], +m[2]]; }
+  if (yr) { const m = yr.match(/([+-]?[\d.]+)\s*to\s*([+-]?[\d.]+)/); if (m) cfg.yRange = [+m[1], +m[2]]; }
+  cfg.xRange = cfg.xRange || [-5, 5];
+  cfg.yRange = cfg.yRange || [-5, 5];
+  return cfg;
+}
+
+async function build3DScene(host, cfg) {
+  /* Wait for Three.js module to load */
+  if (!window.THREE) {
+    for (let i = 0; i < 30; i++) { await _sleep(200); if (window.THREE) break; }
+  }
+  if (!window.THREE) { host.innerHTML = '<div style="padding:1rem;color:var(--text-dim);font-size:0.82rem">3D requires a modern browser.</div>'; return; }
+  const T = window.THREE;
+
+  const wrap = document.createElement("div");
+  wrap.className = "three-wrap";
+  if (cfg.title) { const t = document.createElement("div"); t.className = "three-title"; t.textContent = cfg.title; wrap.appendChild(t); }
+  const hint = document.createElement("div"); hint.className = "three-hint";
+  hint.textContent = "Drag to rotate \u00b7 Scroll to zoom"; wrap.appendChild(hint);
+  host.appendChild(wrap);
+
+  const W = wrap.clientWidth || 400, H = 350;
+  const scene = new T.Scene();
+  scene.background = new T.Color(_themeCol("--surface", "#222222"));
+  const camera = new T.PerspectiveCamera(50, W / H, 0.1, 200);
+  camera.position.set(8, 6, 8);
+  const renderer = new T.WebGLRenderer({ antialias: true });
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  wrap.appendChild(renderer.domElement);
+
+  /* Lighting */
+  scene.add(new T.AmbientLight(0xffffff, 0.5));
+  const dl = new T.DirectionalLight(0xffffff, 0.8); dl.position.set(5, 10, 7); scene.add(dl);
+  const dl2 = new T.DirectionalLight(0x8b7cf6, 0.3); dl2.position.set(-5, -3, -5); scene.add(dl2);
+
+  /* Grid */
+  const grid = new T.GridHelper(12, 12, 0x444444, 0x333333);
+  grid.material.opacity = 0.25; grid.material.transparent = true; scene.add(grid);
+
+  const accentHex = _themeCol("--accent", "#8b7cf6");
+  let autoRotate = false;
+
+  /* ── Type renderers ── */
+  if (cfg.type === "surface" && cfg.formula) {
+    const res = 64, xR = cfg.xRange, yR = cfg.yRange;
+    const xStep = (xR[1] - xR[0]) / res, yStep = (yR[1] - yR[0]) / res;
+    const verts = [], cols = [], idx = [];
+    let mn = Infinity, mx = -Infinity;
+    const zArr = [];
+    for (let i = 0; i <= res; i++) for (let j = 0; j <= res; j++) {
+      const x = xR[0] + i * xStep, y = yR[0] + j * yStep;
+      const z = _evalFormula(cfg.formula, { x, y });
+      const zv = isFinite(z) ? z : 0;
+      verts.push(x, zv, y); zArr.push(zv);
+      if (isFinite(z)) { mn = Math.min(mn, z); mx = Math.max(mx, z); }
+    }
+    const lo = new T.Color("#1a3a8a"), hi = new T.Color(accentHex);
+    for (const z of zArr) { const t = mx !== mn ? (z - mn) / (mx - mn) : 0.5; const c = lo.clone().lerp(hi, t); cols.push(c.r, c.g, c.b); }
+    for (let i = 0; i < res; i++) for (let j = 0; j < res; j++) {
+      const a = i * (res + 1) + j; idx.push(a, a + res + 1, a + 1, a + 1, a + res + 1, a + res + 2);
+    }
+    const geo = new T.BufferGeometry();
+    geo.setIndex(idx);
+    geo.setAttribute("position", new T.Float32BufferAttribute(verts, 3));
+    geo.setAttribute("color", new T.Float32BufferAttribute(cols, 3));
+    geo.computeVertexNormals();
+    const mesh = new T.Mesh(geo, new T.MeshPhongMaterial({ vertexColors: true, side: T.DoubleSide, shininess: 30 }));
+    const span = Math.max(xR[1] - xR[0], yR[1] - yR[0], (mx - mn) || 1);
+    const sc = 8 / span; mesh.scale.set(sc, sc, sc); mesh.position.y = -(mn + mx) / 2 * sc;
+    scene.add(mesh);
+    camera.position.set(10, 8, 10);
+  }
+
+  else if (cfg.type === "shape") {
+    const s = cfg.size, col = cfg.color === "accent" ? accentHex : (cfg.color || accentHex);
+    const geos = { cube: () => new T.BoxGeometry(s,s,s), sphere: () => new T.SphereGeometry(s/2,32,32),
+      torus: () => new T.TorusGeometry(s/2,s/6,16,48), cylinder: () => new T.CylinderGeometry(s/2,s/2,s,32),
+      cone: () => new T.ConeGeometry(s/2,s,32), dodecahedron: () => new T.DodecahedronGeometry(s/2),
+      octahedron: () => new T.OctahedronGeometry(s/2), "torus-knot": () => new T.TorusKnotGeometry(s/3,s/10,100,16) };
+    const geo = (geos[cfg.shape] || geos.cube)();
+    const mat = new T.MeshPhongMaterial({ color: new T.Color(col), wireframe: cfg.wireframe, shininess: 60 });
+    const mesh = new T.Mesh(geo, mat);
+    if (!cfg.wireframe) { const e = new T.EdgesGeometry(geo); mesh.add(new T.LineSegments(e, new T.LineBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.25 }))); }
+    scene.add(mesh);
+    autoRotate = cfg.rotate;
+  }
+
+  else if (cfg.type === "dna") {
+    const turns = 3, ht = 8, rad = 2, nPts = turns * 30;
+    for (let strand = 0; strand < 2; strand++) {
+      const pts = [];
+      for (let i = 0; i <= nPts; i++) {
+        const t = i / nPts, angle = t * turns * 2 * Math.PI + strand * Math.PI;
+        pts.push(new T.Vector3(Math.cos(angle) * rad, t * ht - ht / 2, Math.sin(angle) * rad));
+      }
+      const curve = new T.CatmullRomCurve3(pts);
+      const tube = new T.TubeGeometry(curve, nPts * 2, 0.15, 8, false);
+      scene.add(new T.Mesh(tube, new T.MeshPhongMaterial({ color: strand === 0 ? new T.Color(accentHex) : new T.Color("#ff6b8a"), shininess: 60 })));
+    }
+    const barMat = new T.MeshPhongMaterial({ color: 0x666666 });
+    for (let i = 0; i < nPts; i += 3) {
+      const t = i / nPts, angle = t * turns * 2 * Math.PI, y = t * ht - ht / 2;
+      const p1 = new T.Vector3(Math.cos(angle) * rad, y, Math.sin(angle) * rad);
+      const p2 = new T.Vector3(Math.cos(angle + Math.PI) * rad, y, Math.sin(angle + Math.PI) * rad);
+      const mid = p1.clone().add(p2).multiplyScalar(0.5), len = p1.distanceTo(p2);
+      const bar = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, len, 6), barMat);
+      bar.position.copy(mid); bar.lookAt(p2); bar.rotateX(Math.PI / 2); scene.add(bar);
+    }
+    autoRotate = true;
+  }
+
+  else if (cfg.type === "helix") {
+    const pts = [], nPts = cfg.turns * 30;
+    for (let i = 0; i <= nPts; i++) {
+      const t = i / nPts, angle = t * cfg.turns * 2 * Math.PI;
+      pts.push(new T.Vector3(Math.cos(angle) * cfg.radius, t * cfg.height - cfg.height / 2, Math.sin(angle) * cfg.radius));
+    }
+    const curve = new T.CatmullRomCurve3(pts);
+    scene.add(new T.Mesh(new T.TubeGeometry(curve, nPts * 2, 0.2, 8, false), new T.MeshPhongMaterial({ color: new T.Color(accentHex), shininess: 60 })));
+    autoRotate = true;
+  }
+
+  else if (cfg.type === "molecule" && cfg.atoms) {
+    const atoms = [];
+    for (const part of cfg.atoms.split(",")) {
+      const tk = part.trim().split(/\s+/);
+      if (tk.length >= 6) atoms.push({ pos: new T.Vector3(+tk[1], +tk[2], +tk[3]), color: new T.Color(tk[4]), r: +tk[5] });
+    }
+    for (const a of atoms) { scene.add(new T.Mesh(new T.SphereGeometry(a.r, 24, 24), new T.MeshPhongMaterial({ color: a.color, shininess: 80 }))).position.copy(a.pos); }
+    if (cfg.bonds) {
+      const bm = new T.MeshPhongMaterial({ color: 0x888888 });
+      for (const b of cfg.bonds.split(/\s+/)) {
+        const [a, bi] = b.split("-").map(Number);
+        if (atoms[a] && atoms[bi]) {
+          const p1 = atoms[a].pos, p2 = atoms[bi].pos, mid = p1.clone().add(p2).multiplyScalar(0.5), len = p1.distanceTo(p2);
+          const bar = new T.Mesh(new T.CylinderGeometry(0.12, 0.12, len, 8), bm);
+          bar.position.copy(mid); bar.lookAt(p2); bar.rotateX(Math.PI / 2); scene.add(bar);
+        }
+      }
+    }
+    camera.position.set(5, 4, 5);
+    autoRotate = true;
+  }
+
+  /* Orbit controls */
+  const controls = new T.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+  controls.autoRotate = autoRotate; controls.autoRotateSpeed = 1.5;
+
+  /* Animation loop */
+  let raf;
+  function tick() { raf = requestAnimationFrame(tick); controls.update(); renderer.render(scene, camera); }
+  tick();
+
+  /* Cleanup when removed from DOM */
+  new MutationObserver((_, obs) => { if (!document.contains(wrap)) { cancelAnimationFrame(raf); renderer.dispose(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });
+
+  /* Resize */
+  new ResizeObserver(() => { const w = wrap.clientWidth; camera.aspect = w / H; camera.updateProjectionMatrix(); renderer.setSize(w, H); }).observe(wrap);
+}
+
 /* ── Streaming typewriter helpers ───────────────────
    Reveals assistant text word-by-word for a "thinking live" feel.
    Charts/SVGs appear as discrete steps within the same stream.
@@ -938,11 +1125,20 @@ function buildRenderPlan(text) {
   let remaining = text;
   let trailingChart = null;
 
-  // 0. Interactive chart block?
-  const interactive = parseInteractiveChart(remaining);
-  if (interactive) {
-    remaining = remaining.replace(interactive.raw, "").trim();
-    trailingChart = { kind: "interactive-chart", config: interactive };
+  // 0a. 3D model block?
+  const threeD = parse3DBlock(remaining);
+  if (threeD) {
+    remaining = remaining.replace(threeD.raw, "").trim();
+    trailingChart = { kind: "3d", config: threeD };
+  }
+
+  // 0b. Interactive chart block?
+  if (!trailingChart) {
+    const interactive = parseInteractiveChart(remaining);
+    if (interactive) {
+      remaining = remaining.replace(interactive.raw, "").trim();
+      trailingChart = { kind: "interactive-chart", config: interactive };
+    }
   }
 
   // 1. Explicit chart block?
@@ -1072,6 +1268,17 @@ async function renderMessageContent(container, text, opts = {}) {
         }
         _scrollParentToBottom(container);
         if (!instant) await _sleep(80);
+      }
+      else if (step.kind === "3d") {
+        const wrap = document.createElement("div");
+        if (cursor && cursor.parentNode === container) {
+          container.insertBefore(wrap, cursor);
+        } else {
+          container.appendChild(wrap);
+        }
+        await build3DScene(wrap, step.config);
+        _scrollParentToBottom(container);
+        if (!instant) await _sleep(120);
       }
       else if (step.kind === "interactive-chart") {
         const wrap = document.createElement("div");
