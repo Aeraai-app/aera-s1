@@ -12,8 +12,9 @@
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    window.THREE = THREE;
-    window.THREE.OrbitControls = OrbitControls;
+    /* Store as plain objects on window — Module Namespace objects are non-extensible */
+    window._THREE = { ...THREE };
+    window._OrbitControls = OrbitControls;
   </script>
   {% if clerk_key and clerk_domain %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://{{ clerk_domain }}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" type="text/javascript"></script>{% endif %}
 </head>
@@ -926,12 +927,13 @@ function parse3DBlock(text) {
 }
 
 async function build3DScene(host, cfg) {
+  try {
   /* Wait for Three.js module to load */
-  if (!window.THREE) {
-    for (let i = 0; i < 30; i++) { await _sleep(200); if (window.THREE) break; }
+  if (!window._THREE) {
+    for (let i = 0; i < 30; i++) { await _sleep(200); if (window._THREE) break; }
   }
-  if (!window.THREE) { host.innerHTML = '<div style="padding:1rem;color:var(--text-dim);font-size:0.82rem">3D requires a modern browser.</div>'; return; }
-  const T = window.THREE;
+  if (!window._THREE) { host.innerHTML = '<div style="padding:1rem;color:var(--text-dim);font-size:0.82rem">3D requires a modern browser.</div>'; return; }
+  const T = window._THREE;
 
   const wrap = document.createElement("div");
   wrap.className = "three-wrap";
@@ -1064,14 +1066,24 @@ async function build3DScene(host, cfg) {
     autoRotate = true;
   }
 
+  /* Fallback: if no geometry was added (unknown type), show a default cube */
+  if (scene.children.length <= 4) { /* only lights + grid */
+    const geo = new T.BoxGeometry(2, 2, 2);
+    const mat = new T.MeshPhongMaterial({ color: new T.Color(accentHex), shininess: 60 });
+    scene.add(new T.Mesh(geo, mat));
+    autoRotate = true;
+  }
+
+  camera.lookAt(0, 0, 0);
+
   /* Orbit controls */
-  const controls = new T.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.dampingFactor = 0.08;
-  controls.autoRotate = autoRotate; controls.autoRotateSpeed = 1.5;
+  const OC = window._OrbitControls;
+  const controls = OC ? new OC(camera, renderer.domElement) : null;
+  if (controls) { controls.enableDamping = true; controls.dampingFactor = 0.08; controls.autoRotate = autoRotate; controls.autoRotateSpeed = 1.5; }
 
   /* Animation loop */
   let raf;
-  function tick() { raf = requestAnimationFrame(tick); controls.update(); renderer.render(scene, camera); }
+  function tick() { raf = requestAnimationFrame(tick); if (controls) controls.update(); renderer.render(scene, camera); }
   tick();
 
   /* Cleanup when removed from DOM */
@@ -1079,6 +1091,7 @@ async function build3DScene(host, cfg) {
 
   /* Resize */
   new ResizeObserver(() => { const w = wrap.clientWidth; camera.aspect = w / H; camera.updateProjectionMatrix(); renderer.setSize(w, H); }).observe(wrap);
+  } catch (e) { console.error("3D render error:", e); host.innerHTML = '<div style="padding:1rem;color:var(--text-dim);font-size:0.82rem">3D rendering failed — check console.</div>'; }
 }
 
 /* ── Streaming typewriter helpers ───────────────────
