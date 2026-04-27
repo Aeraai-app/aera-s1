@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://www.desmos.com/api/v1.9/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>
+  <script src="https://www.desmos.com/api/v1.11/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"}}</script>
   <script type="module">
     import * as THREE from 'three';
@@ -958,11 +958,21 @@ function _toLatex(expr) {
     .replace(/(?<!\\)\bbeta\b/g, "\\beta");
 }
 
+/* Detect whether expressions need the 3D calculator */
+function _needsDesmos3D(cfg) {
+  if (cfg.type === "3d") return true;
+  /* Auto-detect: standalone z variable (not inside a word like "size") */
+  return cfg.expressions.some(e => /(?<![a-zA-Z])z(?![a-zA-Z])/.test(e));
+}
+
 function buildDesmosCalc(host, cfg) {
   if (typeof Desmos === "undefined") { host.innerHTML = '<div style="padding:1rem;color:var(--text-dim);font-size:0.82rem">Desmos failed to load.</div>'; return; }
 
+  const use3D = _needsDesmos3D(cfg);
+  const has3D = typeof Desmos.Calculator3D === "function";
+
   const wrap = document.createElement("div");
-  wrap.className = "desmos-wrap";
+  wrap.className = "desmos-wrap" + (use3D ? " desmos-3d" : "");
   if (cfg.title) { const t = document.createElement("div"); t.className = "desmos-title"; t.textContent = cfg.title; wrap.appendChild(t); }
   const calcEl = document.createElement("div");
   calcEl.className = "desmos-calc";
@@ -970,23 +980,32 @@ function buildDesmosCalc(host, cfg) {
   host.appendChild(wrap);
 
   const isDark = document.body.classList.contains("dark");
-  const opts = {
-    keypad: false,
-    expressionsTopbar: false,
-    settingsMenu: false,
-    zoomButtons: true,
-    border: false,
-    expressions: true,
-    lockViewport: false,
-    fontSize: 14,
-    invertedColors: isDark
-  };
 
   let calc;
-  if (cfg.type === "3d" && typeof Desmos.Calculator3D === "function") {
-    calc = Desmos.Calculator3D(calcEl, opts);
+  if (use3D && has3D) {
+    calc = Desmos.Calculator3D(calcEl, {
+      border: false,
+      settingsMenu: false,
+      expressions: true,
+      invertedColors: isDark,
+      fontSize: 14
+    });
   } else {
-    calc = Desmos.GraphingCalculator(calcEl, opts);
+    calc = Desmos.GraphingCalculator(calcEl, {
+      keypad: false,
+      expressionsTopbar: false,
+      settingsMenu: false,
+      zoomButtons: true,
+      border: false,
+      expressions: true,
+      lockViewport: false,
+      fontSize: 14,
+      invertedColors: isDark,
+      images: false,
+      folders: false,
+      notes: false,
+      links: false
+    });
   }
 
   /* Pre-populate expressions */
@@ -1000,6 +1019,14 @@ function buildDesmosCalc(host, cfg) {
   const syncTheme = () => { try { calc.updateSettings({ invertedColors: document.body.classList.contains("dark") }); } catch(e) {} };
   const mo = new MutationObserver(syncTheme);
   mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+  /* Minimize branding after Desmos renders its DOM */
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      const logos = wrap.querySelectorAll('[class*="brand"], [class*="logo"], [class*="watermark"], a[href*="desmos.com"]');
+      logos.forEach(el => { el.style.cssText = "transform:scale(0.55)!important;transform-origin:bottom right!important;opacity:0.3!important;pointer-events:none!important;"; });
+    }, 800);
+  });
 
   /* Cleanup when removed */
   new MutationObserver((_, obs) => { if (!document.contains(wrap)) { calc.destroy(); mo.disconnect(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });

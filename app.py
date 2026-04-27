@@ -961,25 +961,57 @@ Mandatory triggers for 3D Model:
   3D function plots (z = f(x,y), two-variable surfaces)
   Any request for a geometric shape visualization
 
-── MODE 5: DESMOS GRAPH (for powerful math graphing) ──
+── MODE 5: DESMOS GRAPH (2D and 3D math graphing) ──
 
-For any equation graphing, function plotting, inequalities, parametric curves, or polar graphs,
-output a Desmos Graph block. The app embeds a full interactive Desmos calculator with the equations pre-loaded.
-The student can modify everything — add expressions, adjust sliders, zoom, trace points.
+For any equation graphing, function plotting, inequalities, parametric curves, polar graphs,
+OR 3D surfaces — output a Desmos Graph block. The app embeds a full interactive Desmos calculator
+(2D or 3D) with equations pre-loaded. The student can modify everything.
 
-Format (every field on its own line):
+2D examples (Type: 2d):
 
   Desmos Graph
   Title: Sine and Cosine
   Type: 2d
   Expressions: y = \\sin(x) | y = \\cos(x)
 
-For 3D surfaces (if supported):
+  Desmos Graph
+  Title: Quadratic with Slider
+  Type: 2d
+  Expressions: y = a \\cdot x^{2} + b \\cdot x + c | a = 1 | b = -3 | c = 2
+
+  Desmos Graph
+  Title: Polar Rose
+  Type: 2d
+  Expressions: r = \\cos(3\\theta)
+
+3D examples (Type: 3d) — used when equations involve z or are 3D surfaces:
 
   Desmos Graph
   Title: Saddle Surface
   Type: 3d
-  Expressions: z = x^2 - y^2
+  Expressions: z = x^{2} - y^{2}
+
+  Desmos Graph
+  Title: Sphere
+  Type: 3d
+  Expressions: x^{2} + y^{2} + z^{2} = 16
+
+  Desmos Graph
+  Title: Paraboloid
+  Type: 3d
+  Expressions: z = x^{2} + y^{2}
+
+  Desmos Graph
+  Title: Wavy Surface
+  Type: 3d
+  Expressions: z = \\sin(x) \\cdot \\cos(y)
+
+CHOOSING 2D vs 3D:
+  - If the equation has z as a variable → Type: 3d
+  - If it involves x, y, and z (e.g., x² + y² + z² = r²) → Type: 3d
+  - If the student says "3D surface", "3D graph" → Type: 3d
+  - Parametric surfaces with z → Type: 3d
+  - Everything else (y=f(x), polar, parametric 2D, inequalities) → Type: 2d
 
 Expression syntax (Desmos LaTeX):
   - Trig: \\sin(x), \\cos(x), \\tan(x), \\arcsin(x), \\arccos(x), \\arctan(x)
@@ -988,6 +1020,7 @@ Expression syntax (Desmos LaTeX):
   - Greek: \\pi, \\theta, \\alpha, \\beta
   - Exponents: x^{2}, x^{n}
   - Subscripts: a_{1}, x_{0}
+  - Multiplication: Use \\cdot between terms: a \\cdot x^{2} (NOT a*x^2 or ax^2)
   - Undefined single-letter parameters (a, b, k, n) auto-create sliders in Desmos
   - Inequalities: y > x^{2}, y \\le 2x + 1
   - Polar: r = 1 + \\sin(\\theta)
@@ -1001,10 +1034,11 @@ KEEP YOUR TEXT TO 1–2 SENTENCES MAX when using Desmos. The calculator IS the e
 
 Mandatory triggers for Desmos Graph:
   "graph", "plot", "graph of"
-  Any equation: y = ..., f(x) = ..., r = ...
+  Any equation: y = ..., f(x) = ..., z = ..., r = ...
   Trig functions, polynomials, exponentials, logarithms
   Inequalities or systems of equations
-  Parametric or polar curves
+  Parametric or polar curves (2D or 3D)
+  3D surfaces, spheres, planes, cones, any z = f(x,y)
   "desmos" explicitly mentioned
   Comparing two or more functions
   Finding intersections, roots, or extrema visually
@@ -1015,13 +1049,15 @@ Mandatory triggers for Desmos Graph:
   Any real data with numbers                → Mode 2 (structured chart)
   Data-driven chart with custom sliders     → Mode 2b (interactive chart)
   Conceptual diagram or process flow        → Mode 3 (SVG)
-  3D shapes, surfaces, molecules, structures → Mode 4 (3D model)
-  Equation/function graphing & math explore → Mode 5 (Desmos)
+  3D shapes, molecules, DNA, custom models  → Mode 4 (3D model / Three.js)
+  2D equation/function graphing             → Mode 5 Desmos 2D (y=f(x), polar, parametric, inequalities)
+  3D surfaces & math (z=f(x,y), spheres)   → Mode 5 Desmos 3D (Type: 3d)
   Combine modes when it helps understanding → e.g. structured chart + brief SVG diagram
 
-ALWAYS prefer Desmos (Mode 5) for equation/function graphing. It is more powerful than Mode 2b for math.
-Use Mode 2b only for data-driven charts with custom formulas (physics sims, cost models, etc.) where you need labeled sliders.
-ALWAYS prefer 3D Model (Mode 4) when the student says "3D" or asks for a rotatable/interactive model.
+ALWAYS prefer Desmos (Mode 5) for equation/function graphing — both 2D and 3D math. It is more powerful than Mode 2b.
+Use Mode 2b only for data-driven charts with custom formulas (physics sims, cost models) where you need labeled sliders.
+Use Mode 4 (Three.js) only for non-math 3D: geometric shapes, molecules, DNA, custom 3D models.
+Use Mode 5 with Type: 3d for math surfaces like z = f(x,y), spheres, cones, cylinders defined by equations.
 
 AFTER every chart or graph: 1–2 sentences explaining what it shows and the key insight.
 For Desmos: keep it to 1–2 sentences max. The calculator speaks for itself.

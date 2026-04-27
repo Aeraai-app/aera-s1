@@ -1177,11 +1177,26 @@ body {
   width: 100%;
   height: 440px;
 }
-/* Shrink the Desmos branding watermark */
-.desmos-wrap .dcg-brand-logo {
-  transform: scale(0.7);
-  transform-origin: bottom right;
-  opacity: 0.45;
+.desmos-3d .desmos-calc {
+  height: 480px;
+}
+/* Minimize Desmos branding — smallest allowed, bottom-right, unobtrusive */
+.desmos-wrap [class*="brand"],
+.desmos-wrap [class*="logo"],
+.desmos-wrap [class*="watermark"],
+.desmos-wrap a[href*="desmos.com"] {
+  transform: scale(0.55) !important;
+  transform-origin: bottom right !important;
+  opacity: 0.25 !important;
+  pointer-events: none !important;
+  filter: grayscale(1) !important;
+}
+/* Dark-mode: blend Desmos chrome with our surface */
+body.dark .desmos-wrap {
+  border-color: rgba(255,255,255,0.06);
+}
+body.dark .desmos-title {
+  background: var(--surface);
 }
 
 .three-wrap {
