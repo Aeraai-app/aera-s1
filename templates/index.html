@@ -979,8 +979,9 @@ function buildDesmosCalc(host, cfg) {
   wrap.appendChild(calcEl);
   host.appendChild(wrap);
 
-  const _isDark = () => document.documentElement.getAttribute("data-theme") === "dark";
-  const isDark = _isDark();
+  /* Dark mode is handled entirely by CSS filter on .desmos-calc — no invertedColors needed.
+     invert(0.88) hue-rotate(180deg) maps: white→#1F1F1F, black→#E0E0E0, gridlines→#323232.
+     Desmos default expression colors transform naturally through the filter. */
 
   let calc;
   if (use3D && has3D) {
@@ -988,7 +989,6 @@ function buildDesmosCalc(host, cfg) {
       border: false,
       settingsMenu: false,
       expressions: true,
-      invertedColors: isDark,
       fontSize: 14
     });
   } else {
@@ -1001,7 +1001,6 @@ function buildDesmosCalc(host, cfg) {
       expressions: true,
       lockViewport: false,
       fontSize: 14,
-      invertedColors: isDark,
       images: false,
       folders: false,
       notes: false,
@@ -1009,28 +1008,22 @@ function buildDesmosCalc(host, cfg) {
     });
   }
 
-  /* Pre-populate expressions */
-  const colors = ["#8b7cf6", "#ff6b8a", "#4ecdc4", "#ffe66d", "#ff8c42", "#a8e6cf"];
+  /* Pre-populate expressions — let Desmos auto-assign from its default palette */
   for (let i = 0; i < cfg.expressions.length; i++) {
-    const latex = _toLatex(cfg.expressions[i]);
-    calc.setExpression({ id: "expr" + i, latex, color: colors[i % colors.length] });
+    calc.setExpression({ id: "expr" + i, latex: _toLatex(cfg.expressions[i]) });
   }
-
-  /* Sync dark/light on theme toggle — theme lives on <html data-theme="dark|light"> */
-  const syncTheme = () => { try { calc.updateSettings({ invertedColors: _isDark() }); } catch(e) {} };
-  const mo = new MutationObserver(syncTheme);
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   /* Minimize branding after Desmos renders its DOM */
   requestAnimationFrame(() => {
     setTimeout(() => {
-      const logos = wrap.querySelectorAll('[class*="brand"], [class*="logo"], [class*="watermark"], a[href*="desmos.com"]');
-      logos.forEach(el => { el.style.cssText = "transform:scale(0.55)!important;transform-origin:bottom right!important;opacity:0.3!important;pointer-events:none!important;"; });
+      wrap.querySelectorAll('[class*="brand"], [class*="logo"], [class*="watermark"], a[href*="desmos.com"]').forEach(el => {
+        el.style.cssText = "transform:scale(0.55)!important;transform-origin:bottom right!important;opacity:0.25!important;pointer-events:none!important;";
+      });
     }, 800);
   });
 
   /* Cleanup when removed */
-  new MutationObserver((_, obs) => { if (!document.contains(wrap)) { calc.destroy(); mo.disconnect(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });
+  new MutationObserver((_, obs) => { if (!document.contains(wrap)) { calc.destroy(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });
 }
 
 async function build3DScene(host, cfg) {

@@ -1191,12 +1191,19 @@ body {
   pointer-events: none !important;
   filter: grayscale(1) !important;
 }
-/* Dark-mode: blend Desmos chrome with our surface */
+/* Dark-mode: CSS filter converts Desmos light theme into a natural dark theme.
+   invert(0.88)  → white#fff becomes #1F1F1F, black becomes #E0E0E0
+   hue-rotate(180deg) → preserves hue identity after inversion
+   Result: dark grey bg, subtle gridlines, light axes/labels, natural expression colors. */
+[data-theme="dark"] .desmos-calc {
+  filter: invert(0.88) hue-rotate(180deg);
+  transition: filter 0.3s ease;
+}
+[data-theme="light"] .desmos-calc {
+  transition: filter 0.3s ease;
+}
 [data-theme="dark"] .desmos-wrap {
   border-color: rgba(255,255,255,0.06);
-}
-[data-theme="dark"] .desmos-title {
-  background: var(--surface);
 }
 
 .three-wrap {
