@@ -1026,6 +1026,91 @@ function buildDesmosCalc(host, cfg) {
   new MutationObserver((_, obs) => { if (!document.contains(wrap)) { calc.destroy(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });
 }
 
+/* ── Sketchfab 3D Model Viewer ───────────────────── */
+
+function parseSketchfabBlock(text) {
+  const match = text.match(/Sketchfab Model\s*\n((?:\s*(?:Title|Search):.*\n?)+)/i);
+  if (!match) return null;
+  const raw = match[0], body = match[1];
+  const get = k => { const m = body.match(new RegExp("^\\s*" + k + ":\\s*(.+)", "im")); return m ? m[1].trim() : null; };
+  const search = get("Search");
+  if (!search) return null;
+  return { raw, title: get("Title") || search, search };
+}
+
+async function buildSketchfabViewer(host, cfg) {
+  const wrap = document.createElement("div");
+  wrap.className = "sketchfab-wrap";
+
+  /* Title bar */
+  const header = document.createElement("div");
+  header.className = "sketchfab-header";
+  const titleEl = document.createElement("span");
+  titleEl.className = "sketchfab-title";
+  titleEl.textContent = cfg.title;
+  header.appendChild(titleEl);
+
+  const fsBtn = document.createElement("button");
+  fsBtn.className = "sketchfab-btn";
+  fsBtn.title = "Fullscreen";
+  fsBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+  fsBtn.onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else wrap.requestFullscreen().catch(() => {});
+  };
+  header.appendChild(fsBtn);
+  wrap.appendChild(header);
+
+  /* Loading state */
+  const loading = document.createElement("div");
+  loading.className = "sketchfab-loading";
+  loading.innerHTML = '<div class="sketchfab-spinner"></div><span>Searching for 3D model\u2026</span>';
+
+  const viewerEl = document.createElement("div");
+  viewerEl.className = "sketchfab-viewer";
+  viewerEl.appendChild(loading);
+  wrap.appendChild(viewerEl);
+  host.appendChild(wrap);
+
+  /* Search via backend proxy */
+  try {
+    const resp = await fetch("/api/sketchfab-search?q=" + encodeURIComponent(cfg.search));
+    if (!resp.ok) throw new Error("not found");
+    const data = await resp.json();
+    const results = data.results;
+    if (!results || !results.length) throw new Error("no results");
+    const model = results[0];
+
+    loading.querySelector("span").textContent = "Loading 3D model\u2026";
+
+    /* Embed iframe */
+    const iframe = document.createElement("iframe");
+    iframe.className = "sketchfab-iframe";
+    iframe.allow = "autoplay; fullscreen; xr-spatial-tracking";
+    iframe.allowFullscreen = true;
+    iframe.src = "https://sketchfab.com/models/" + model.uid + "/embed"
+      + "?autostart=1&preload=1&transparent=1&ui_infos=0&ui_stop=0&ui_hint=0"
+      + "&ui_watermark=1&ui_color=8B7CF6&dnt=1&scrollwheel=1&ui_fullscreen=0";
+    viewerEl.appendChild(iframe);
+
+    iframe.onload = () => { loading.style.display = "none"; };
+    /* Fallback: hide loading after 8s even if onload doesn't fire */
+    setTimeout(() => { loading.style.display = "none"; }, 8000);
+
+    /* Credit bar */
+    if (model.author) {
+      const credit = document.createElement("div");
+      credit.className = "sketchfab-credit";
+      credit.innerHTML = '<span>Model by <strong>' + model.author.replace(/</g, "&lt;") + '</strong> on Sketchfab</span>';
+      wrap.appendChild(credit);
+    }
+
+  } catch (e) {
+    loading.innerHTML = '<span class="sketchfab-error">Couldn\u2019t find a 3D model for \u201c'
+      + cfg.search.replace(/</g, "&lt;") + '\u201d. Try being more specific, like \u201c3D model of a red sports car\u201d.</span>';
+  }
+}
+
 async function build3DScene(host, cfg) {
   try {
   /* Wait for Three.js module to load */
@@ -1245,6 +1330,15 @@ function buildRenderPlan(text) {
     trailingChart = { kind: "desmos", config: desmos };
   }
 
+  // 0-sf. Sketchfab 3D model block?
+  if (!trailingChart) {
+    const sf = parseSketchfabBlock(remaining);
+    if (sf) {
+      remaining = remaining.replace(sf.raw, "").trim();
+      trailingChart = { kind: "sketchfab", config: sf };
+    }
+  }
+
   // 0a. 3D model block?
   if (!trailingChart) {
   const threeD = parse3DBlock(remaining);
@@ -1399,6 +1493,17 @@ async function renderMessageContent(container, text, opts = {}) {
           container.appendChild(wrap);
         }
         buildDesmosCalc(wrap, step.config);
+        _scrollParentToBottom(container);
+        if (!instant) await _sleep(120);
+      }
+      else if (step.kind === "sketchfab") {
+        const wrap = document.createElement("div");
+        if (cursor && cursor.parentNode === container) {
+          container.insertBefore(wrap, cursor);
+        } else {
+          container.appendChild(wrap);
+        }
+        await buildSketchfabViewer(wrap, step.config);
         _scrollParentToBottom(container);
         if (!instant) await _sleep(120);
       }

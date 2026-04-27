@@ -955,11 +955,9 @@ Formula rules (same as Interactive Chart):
   - For surfaces the two variables are always x and y.
 
 Mandatory triggers for 3D Model:
-  "3D" anywhere in the request
-  "rotate", "spin", "interactive model"
   Molecular structures when user asks to SEE them
-  3D function plots (z = f(x,y), two-variable surfaces)
-  Any request for a geometric shape visualization
+  Geometric shape primitives (cube, sphere, torus, etc.)
+  DNA, helix structures
 
 ── MODE 5: DESMOS GRAPH (2D and 3D math graphing) ──
 
@@ -1043,21 +1041,60 @@ Mandatory triggers for Desmos Graph:
   Comparing two or more functions
   Finding intersections, roots, or extrema visually
 
+── MODE 6: SKETCHFAB 3D MODEL (real-world objects) ──
+
+When the student asks to see a real-world 3D object (car, animal, building, anatomy, product,
+character, furniture, weapon, instrument, tool, etc.), output a Sketchfab Model block.
+The app searches Sketchfab's library and loads an interactive viewer where the student can
+rotate, zoom, and pan to explore from any angle.
+
+Format (every field on its own line):
+
+  Sketchfab Model
+  Title: McLaren P1
+  Search: McLaren P1 supercar 3D
+
+  Sketchfab Model
+  Title: Human Heart Anatomy
+  Search: human heart anatomy realistic
+
+  Sketchfab Model
+  Title: Acoustic Guitar
+  Search: acoustic guitar instrument
+
+Rules:
+  - Title: clean name shown to the user
+  - Search: optimized Sketchfab search query — be specific, add descriptive keywords
+  - Keep your text to 1 sentence. Let the 3D model speak for itself.
+  - The viewer has built-in orbit controls (drag to rotate, scroll to zoom, right-drag to pan)
+
+Mandatory triggers:
+  "3D model of [real object]", "show me a 3D [object]", "3D [object]"
+  Any request to visualize a physical/real-world object in 3D
+  Cars, animals, anatomy, buildings, products, characters, furniture, instruments
+  Architecture, engineering parts, historical artifacts, fashion items
+
+DO NOT use Sketchfab for:
+  - Math (graphs, surfaces, equations) → use Mode 5 (Desmos)
+  - Simple geometric shapes (cube, sphere) → use Mode 4 (Three.js)
+  - Molecules, DNA → use Mode 4 (Three.js)
+
 ── WHEN TO USE EACH ──
 
   Quick inline visual during explanation    → Mode 1 (text graph)
   Any real data with numbers                → Mode 2 (structured chart)
   Data-driven chart with custom sliders     → Mode 2b (interactive chart)
   Conceptual diagram or process flow        → Mode 3 (SVG)
-  3D shapes, molecules, DNA, custom models  → Mode 4 (3D model / Three.js)
-  2D equation/function graphing             → Mode 5 Desmos 2D (y=f(x), polar, parametric, inequalities)
-  3D surfaces & math (z=f(x,y), spheres)   → Mode 5 Desmos 3D (Type: 3d)
+  Geometric shapes, molecules, DNA          → Mode 4 (Three.js)
+  2D equation/function graphing             → Mode 5 Desmos 2D
+  3D math surfaces (z=f(x,y))              → Mode 5 Desmos 3D
+  Real-world 3D objects (cars, anatomy...)  → Mode 6 (Sketchfab)
   Combine modes when it helps understanding → e.g. structured chart + brief SVG diagram
 
-ALWAYS prefer Desmos (Mode 5) for equation/function graphing — both 2D and 3D math. It is more powerful than Mode 2b.
-Use Mode 2b only for data-driven charts with custom formulas (physics sims, cost models) where you need labeled sliders.
-Use Mode 4 (Three.js) only for non-math 3D: geometric shapes, molecules, DNA, custom 3D models.
-Use Mode 5 with Type: 3d for math surfaces like z = f(x,y), spheres, cones, cylinders defined by equations.
+ALWAYS prefer Desmos (Mode 5) for equation/function graphing — both 2D and 3D math.
+Use Mode 2b only for data-driven charts with custom formulas (physics sims, cost models).
+Use Mode 6 (Sketchfab) for any real-world object the student wants to see in 3D.
+Use Mode 4 (Three.js) only for programmatic 3D: geometric primitives, molecules, DNA.
 
 AFTER every chart or graph: 1–2 sentences explaining what it shows and the key insight.
 For Desmos: keep it to 1–2 sentences max. The calculator speaks for itself.
@@ -1546,6 +1583,37 @@ def reset_model():
     global user_model
     user_model = _fresh_model()
     return jsonify({"ok": True})
+
+
+@app.route("/api/sketchfab-search")
+def sketchfab_search():
+    """Search Sketchfab for 3D models and return the top result."""
+    import urllib.request, urllib.parse
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"error": "No query provided"}), 400
+    url = "https://api.sketchfab.com/v3/search?type=models&q=" + urllib.parse.quote(q) + "&count=3&sort_by=-relevance"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "AeraAI/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        results = data.get("results", [])
+        if not results:
+            return jsonify({"error": "No models found", "query": q}), 404
+        out = []
+        for m in results:
+            thumbs = m.get("thumbnails", {}).get("images", [])
+            out.append({
+                "uid": m["uid"],
+                "name": m.get("name", ""),
+                "author": m.get("user", {}).get("displayName", ""),
+                "thumbnail": thumbs[-1]["url"] if thumbs else "",
+                "viewCount": m.get("viewCount", 0),
+                "likeCount": m.get("likeCount", 0),
+            })
+        return jsonify({"results": out})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
 
 
 # ── File / media ingestion ────────────────────────────────────────────────────
