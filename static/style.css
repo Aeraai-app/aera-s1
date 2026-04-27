@@ -1192,10 +1192,10 @@ body {
   filter: grayscale(1) !important;
 }
 /* Dark-mode: blend Desmos chrome with our surface */
-body.dark .desmos-wrap {
+[data-theme="dark"] .desmos-wrap {
   border-color: rgba(255,255,255,0.06);
 }
-body.dark .desmos-title {
+[data-theme="dark"] .desmos-title {
   background: var(--surface);
 }
 

@@ -979,7 +979,8 @@ function buildDesmosCalc(host, cfg) {
   wrap.appendChild(calcEl);
   host.appendChild(wrap);
 
-  const isDark = document.body.classList.contains("dark");
+  const _isDark = () => document.documentElement.getAttribute("data-theme") === "dark";
+  const isDark = _isDark();
 
   let calc;
   if (use3D && has3D) {
@@ -1015,10 +1016,10 @@ function buildDesmosCalc(host, cfg) {
     calc.setExpression({ id: "expr" + i, latex, color: colors[i % colors.length] });
   }
 
-  /* Sync dark/light on theme toggle */
-  const syncTheme = () => { try { calc.updateSettings({ invertedColors: document.body.classList.contains("dark") }); } catch(e) {} };
+  /* Sync dark/light on theme toggle — theme lives on <html data-theme="dark|light"> */
+  const syncTheme = () => { try { calc.updateSettings({ invertedColors: _isDark() }); } catch(e) {} };
   const mo = new MutationObserver(syncTheme);
-  mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   /* Minimize branding after Desmos renders its DOM */
   requestAnimationFrame(() => {
