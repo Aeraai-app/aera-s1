@@ -310,6 +310,41 @@
 </main>
 
 <!-- ══════════════════════════════════════════════════
+     TEACHING PANEL (slides in from right)
+══════════════════════════════════════════════════ -->
+<div class="teach-panel" id="teach-panel">
+  <div class="teach-resize" id="teach-resize"></div>
+  <div class="teach-header">
+    <div class="teach-header-left">
+      <div class="teach-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+      </div>
+      <span class="teach-topic" id="teach-topic">Lesson</span>
+    </div>
+    <button class="teach-close" onclick="closeTeachPanel()" title="Close panel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="teach-progress">
+    <div class="teach-progress-bar" id="teach-progress-bar"></div>
+  </div>
+  <div class="teach-progress-label" id="teach-progress-label">Step 1 of 1</div>
+  <div class="teach-body" id="teach-body">
+    <!-- Steps rendered here by JS -->
+  </div>
+  <div class="teach-nav" id="teach-nav">
+    <button class="teach-nav-btn" id="teach-back" onclick="teachStep(-1)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </button>
+    <button class="teach-nav-btn teach-nav-next" id="teach-next" onclick="teachStep(1)">
+      Next
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
      CAMERA MODAL (shared by Home + Notes)
 ══════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="camera-modal">
@@ -1026,6 +1061,182 @@ function buildDesmosCalc(host, cfg) {
   new MutationObserver((_, obs) => { if (!document.contains(wrap)) { calc.destroy(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });
 }
 
+/* ── Teaching Panel ───────────────────────────────── */
+
+let _teachData = null;   /* { topic, steps[] } */
+let _teachIdx  = 0;      /* current step index */
+
+function parseTeachingBlock(text) {
+  const idx = text.indexOf("Teaching Panel\n");
+  if (idx === -1) return null;
+  const raw = text.slice(idx);
+  const body = raw.replace(/^Teaching Panel\s*\n/, "");
+  const topicM = body.match(/^\s*Topic:\s*(.+)/m);
+  const topic = topicM ? topicM[1].trim() : "Lesson";
+
+  const stepBlocks = body.split(/(?=^\s*Step:\s)/m).filter(b => /^\s*Step:/m.test(b));
+  if (!stepBlocks.length) return null;
+
+  const steps = stepBlocks.map(block => {
+    const lines = block.split("\n");
+    const title = lines[0].replace(/^\s*Step:\s*/, "").trim();
+    let highlight = "", graph = "", practice = "", hint = "", answer = "";
+    const textLines = [];
+    for (let i = 1; i < lines.length; i++) {
+      const l = lines[i];
+      if (/^\s*Highlight:\s/i.test(l))  highlight = l.replace(/^\s*Highlight:\s*/i, "").trim();
+      else if (/^\s*Graph:\s/i.test(l)) graph = l.replace(/^\s*Graph:\s*/i, "").trim();
+      else if (/^\s*Practice:\s/i.test(l)) practice = l.replace(/^\s*Practice:\s*/i, "").trim();
+      else if (/^\s*Hint:\s/i.test(l))  hint = l.replace(/^\s*Hint:\s*/i, "").trim();
+      else if (/^\s*Answer:\s/i.test(l)) answer = l.replace(/^\s*Answer:\s*/i, "").trim();
+      else textLines.push(l);
+    }
+    return { title, text: textLines.join("\n").trim(), highlight, graph, practice, hint, answer };
+  });
+
+  return { raw, topic, steps };
+}
+
+function openTeachPanel(data) {
+  _teachData = data;
+  _teachIdx = 0;
+  document.getElementById("teach-topic").textContent = data.topic;
+  _renderTeachStep();
+  const panel = document.getElementById("teach-panel");
+  panel.classList.add("open");
+  const pw = parseInt(panel.style.width) || 480;
+  document.querySelector(".main").classList.add("teach-pushed");
+  document.querySelector(".main").style.marginRight = pw + "px";
+}
+
+function closeTeachPanel() {
+  document.getElementById("teach-panel").classList.remove("open");
+  const main = document.querySelector(".main");
+  main.style.marginRight = "";
+  setTimeout(() => main.classList.remove("teach-pushed"), 350);
+  _teachData = null;
+}
+
+function teachStep(dir) {
+  if (!_teachData) return;
+  const next = _teachIdx + dir;
+  if (next < 0 || next >= _teachData.steps.length) return;
+  _teachIdx = next;
+  _renderTeachStep();
+}
+
+function _renderTeachStep() {
+  if (!_teachData) return;
+  const s = _teachData.steps[_teachIdx];
+  const total = _teachData.steps.length;
+  const pct = (((_teachIdx + 1) / total) * 100).toFixed(1);
+
+  document.getElementById("teach-progress-bar").style.width = pct + "%";
+  document.getElementById("teach-progress-label").textContent = "Step " + (_teachIdx + 1) + " of " + total;
+  document.getElementById("teach-back").disabled = _teachIdx === 0;
+
+  const nextBtn = document.getElementById("teach-next");
+  if (_teachIdx === total - 1) {
+    nextBtn.innerHTML = 'Done <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+    nextBtn.onclick = closeTeachPanel;
+  } else {
+    nextBtn.innerHTML = 'Next <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>';
+    nextBtn.onclick = () => teachStep(1);
+    nextBtn.disabled = false;
+  }
+
+  const body = document.getElementById("teach-body");
+  body.innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "teach-step active";
+
+  /* Title */
+  const ttl = document.createElement("div");
+  ttl.className = "teach-step-title";
+  ttl.textContent = s.title;
+  div.appendChild(ttl);
+
+  /* Text (render bold markers) */
+  if (s.text) {
+    const p = document.createElement("div");
+    p.className = "teach-step-text";
+    p.innerHTML = s.text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>");
+    div.appendChild(p);
+  }
+
+  /* Highlight box */
+  if (s.highlight) {
+    const h = document.createElement("div");
+    h.className = "teach-highlight";
+    h.textContent = s.highlight;
+    div.appendChild(h);
+  }
+
+  /* Graph (embed Desmos) */
+  if (s.graph && typeof Desmos !== "undefined") {
+    const gWrap = document.createElement("div");
+    gWrap.className = "teach-graph";
+    div.appendChild(gWrap);
+    const gEl = document.createElement("div");
+    gEl.className = "desmos-calc";
+    gWrap.appendChild(gEl);
+    try {
+      const calc = Desmos.GraphingCalculator(gEl, { keypad:false, expressionsTopbar:false, settingsMenu:false, zoomButtons:true, border:false, expressions:true, fontSize:12, images:false, folders:false, notes:false, links:false });
+      s.graph.split("|").forEach((expr, i) => calc.setExpression({ id:"t"+i, latex: _toLatex(expr.trim()) }));
+    } catch(e) {}
+  }
+
+  /* Practice area */
+  if (s.practice) {
+    const pr = document.createElement("div");
+    pr.className = "teach-practice";
+    pr.innerHTML = '<div class="teach-practice-q">' + s.practice.replace(/</g, "&lt;") + '</div>'
+      + '<textarea class="teach-practice-input" placeholder="Type your answer\u2026" rows="2"></textarea>'
+      + '<div class="teach-practice-btns">'
+      + (s.hint ? '<button class="teach-practice-btn" onclick="this.parentElement.parentElement.querySelector(\'.teach-hint-box\')?.remove(); var r=document.createElement(\'div\');r.className=\'teach-reveal teach-hint-box\';r.innerHTML=\'<div class=teach-reveal-label>Hint</div>\'+this.dataset.hint;this.parentElement.parentElement.appendChild(r)" data-hint="' + s.hint.replace(/"/g, "&quot;") + '">Show hint</button>' : '')
+      + '<button class="teach-practice-btn primary" onclick="_checkTeachAnswer(this)">Check answer</button>'
+      + (s.answer ? '<button class="teach-practice-btn" onclick="this.parentElement.parentElement.querySelector(\'.teach-answer-box\')?.remove(); var r=document.createElement(\'div\');r.className=\'teach-reveal teach-answer-box\';r.innerHTML=\'<div class=teach-reveal-label>Answer</div>\'+this.dataset.ans;this.parentElement.parentElement.appendChild(r)" data-ans="' + s.answer.replace(/"/g, "&quot;") + '">Show answer</button>' : '')
+      + '</div>';
+    div.appendChild(pr);
+    /* Store answer for checking */
+    if (s.answer) div.dataset.answer = s.answer;
+  }
+
+  body.appendChild(div);
+  body.scrollTop = 0;
+}
+
+function _checkTeachAnswer(btn) {
+  const wrap = btn.closest(".teach-step");
+  const input = wrap.querySelector(".teach-practice-input");
+  const answer = wrap.dataset.answer || "";
+  if (!input || !input.value.trim()) return;
+  wrap.querySelector(".teach-result")?.remove();
+  const res = document.createElement("div");
+  const userVal = input.value.trim().toLowerCase().replace(/\s+/g, " ");
+  const ansVal = answer.toLowerCase().replace(/\s+/g, " ");
+  const match = ansVal && (userVal.includes(ansVal) || ansVal.includes(userVal) || ansVal.split(/,\s*/).every(a => userVal.includes(a.trim())));
+  res.className = "teach-result " + (match ? "correct" : "incorrect");
+  res.textContent = match ? "Correct! Great job." : "Not quite \u2014 try again or reveal the answer.";
+  btn.closest(".teach-practice").appendChild(res);
+}
+
+/* Resize handle drag */
+(function() {
+  const handle = document.getElementById("teach-resize");
+  const panel = document.getElementById("teach-panel");
+  if (!handle || !panel) return;
+  let dragging = false;
+  handle.addEventListener("mousedown", e => { dragging = true; e.preventDefault(); });
+  document.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const w = Math.max(320, Math.min(window.innerWidth - 200, window.innerWidth - e.clientX));
+    panel.style.width = w + "px";
+    if (panel.classList.contains("open")) document.querySelector(".main").style.marginRight = w + "px";
+  });
+  document.addEventListener("mouseup", () => { dragging = false; });
+})();
+
 /* ── Sketchfab 3D Model Viewer ───────────────────── */
 
 function parseSketchfabBlock(text) {
@@ -1323,11 +1534,20 @@ function buildRenderPlan(text) {
   let remaining = text;
   let trailingChart = null;
 
+  // 0-teach. Teaching panel block?
+  const teach = parseTeachingBlock(remaining);
+  if (teach) {
+    remaining = remaining.replace(teach.raw, "").trim();
+    trailingChart = { kind: "teaching", config: teach };
+  }
+
   // 0. Desmos graph block?
-  const desmos = parseDesmosBlock(remaining);
-  if (desmos) {
-    remaining = remaining.replace(desmos.raw, "").trim();
-    trailingChart = { kind: "desmos", config: desmos };
+  if (!trailingChart) {
+    const desmos = parseDesmosBlock(remaining);
+    if (desmos) {
+      remaining = remaining.replace(desmos.raw, "").trim();
+      trailingChart = { kind: "desmos", config: desmos };
+    }
   }
 
   // 0-sf. Sketchfab 3D model block?
@@ -1484,6 +1704,10 @@ async function renderMessageContent(container, text, opts = {}) {
         }
         _scrollParentToBottom(container);
         if (!instant) await _sleep(80);
+      }
+      else if (step.kind === "teaching") {
+        openTeachPanel(step.config);
+        if (!instant) await _sleep(100);
       }
       else if (step.kind === "desmos") {
         const wrap = document.createElement("div");
