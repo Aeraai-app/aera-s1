@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://www.desmos.com/api/v1.9/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"}}</script>
   <script type="module">
     import * as THREE from 'three';
@@ -926,6 +927,84 @@ function parse3DBlock(text) {
   return cfg;
 }
 
+/* ── Desmos Calculator ───────────────────────────── */
+
+function parseDesmosBlock(text) {
+  const match = text.match(/Desmos Graph\s*\n((?:\s*(?:Title|Type|Expressions):.*\n?)+)/i);
+  if (!match) return null;
+  const raw = match[0], body = match[1];
+  const get = k => { const m = body.match(new RegExp("^\\s*" + k + ":\\s*(.+)", "im")); return m ? m[1].trim() : null; };
+  const exprs = (get("Expressions") || "").split("|").map(e => e.trim()).filter(Boolean);
+  if (!exprs.length) return null;
+  return { raw, title: get("Title") || "", type: (get("Type") || "2d").toLowerCase(), expressions: exprs };
+}
+
+function _toLatex(expr) {
+  /* Convert plain math to Desmos-compatible LaTeX (only if not already escaped) */
+  return expr
+    .replace(/(?<!\\)\bsin\b/g, "\\sin")
+    .replace(/(?<!\\)\bcos\b/g, "\\cos")
+    .replace(/(?<!\\)\btan\b/g, "\\tan")
+    .replace(/(?<!\\)\barcsin\b/g, "\\arcsin")
+    .replace(/(?<!\\)\barccos\b/g, "\\arccos")
+    .replace(/(?<!\\)\barctan\b/g, "\\arctan")
+    .replace(/(?<!\\)\bsqrt\b/g, "\\sqrt")
+    .replace(/(?<!\\)\bln\b/g, "\\ln")
+    .replace(/(?<!\\)\blog\b/g, "\\log")
+    .replace(/(?<!\\)\bpi\b/g, "\\pi")
+    .replace(/(?<!\\)\btheta\b/g, "\\theta")
+    .replace(/(?<!\\)\binfty\b/g, "\\infty")
+    .replace(/(?<!\\)\balpha\b/g, "\\alpha")
+    .replace(/(?<!\\)\bbeta\b/g, "\\beta");
+}
+
+function buildDesmosCalc(host, cfg) {
+  if (typeof Desmos === "undefined") { host.innerHTML = '<div style="padding:1rem;color:var(--text-dim);font-size:0.82rem">Desmos failed to load.</div>'; return; }
+
+  const wrap = document.createElement("div");
+  wrap.className = "desmos-wrap";
+  if (cfg.title) { const t = document.createElement("div"); t.className = "desmos-title"; t.textContent = cfg.title; wrap.appendChild(t); }
+  const calcEl = document.createElement("div");
+  calcEl.className = "desmos-calc";
+  wrap.appendChild(calcEl);
+  host.appendChild(wrap);
+
+  const isDark = document.body.classList.contains("dark");
+  const opts = {
+    keypad: false,
+    expressionsTopbar: false,
+    settingsMenu: false,
+    zoomButtons: true,
+    border: false,
+    expressions: true,
+    lockViewport: false,
+    fontSize: 14,
+    invertedColors: isDark
+  };
+
+  let calc;
+  if (cfg.type === "3d" && typeof Desmos.Calculator3D === "function") {
+    calc = Desmos.Calculator3D(calcEl, opts);
+  } else {
+    calc = Desmos.GraphingCalculator(calcEl, opts);
+  }
+
+  /* Pre-populate expressions */
+  const colors = ["#8b7cf6", "#ff6b8a", "#4ecdc4", "#ffe66d", "#ff8c42", "#a8e6cf"];
+  for (let i = 0; i < cfg.expressions.length; i++) {
+    const latex = _toLatex(cfg.expressions[i]);
+    calc.setExpression({ id: "expr" + i, latex, color: colors[i % colors.length] });
+  }
+
+  /* Sync dark/light on theme toggle */
+  const syncTheme = () => { try { calc.updateSettings({ invertedColors: document.body.classList.contains("dark") }); } catch(e) {} };
+  const mo = new MutationObserver(syncTheme);
+  mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+  /* Cleanup when removed */
+  new MutationObserver((_, obs) => { if (!document.contains(wrap)) { calc.destroy(); mo.disconnect(); obs.disconnect(); } }).observe(document.body, { childList: true, subtree: true });
+}
+
 async function build3DScene(host, cfg) {
   try {
   /* Wait for Three.js module to load */
@@ -1138,11 +1217,20 @@ function buildRenderPlan(text) {
   let remaining = text;
   let trailingChart = null;
 
+  // 0. Desmos graph block?
+  const desmos = parseDesmosBlock(remaining);
+  if (desmos) {
+    remaining = remaining.replace(desmos.raw, "").trim();
+    trailingChart = { kind: "desmos", config: desmos };
+  }
+
   // 0a. 3D model block?
+  if (!trailingChart) {
   const threeD = parse3DBlock(remaining);
   if (threeD) {
     remaining = remaining.replace(threeD.raw, "").trim();
     trailingChart = { kind: "3d", config: threeD };
+  }
   }
 
   // 0b. Interactive chart block?
@@ -1281,6 +1369,17 @@ async function renderMessageContent(container, text, opts = {}) {
         }
         _scrollParentToBottom(container);
         if (!instant) await _sleep(80);
+      }
+      else if (step.kind === "desmos") {
+        const wrap = document.createElement("div");
+        if (cursor && cursor.parentNode === container) {
+          container.insertBefore(wrap, cursor);
+        } else {
+          container.appendChild(wrap);
+        }
+        buildDesmosCalc(wrap, step.config);
+        _scrollParentToBottom(container);
+        if (!instant) await _sleep(120);
       }
       else if (step.kind === "3d") {
         const wrap = document.createElement("div");

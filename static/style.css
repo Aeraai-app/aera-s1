@@ -1155,6 +1155,35 @@ body {
 }
 
 /* 3D model container */
+/* Desmos calculator embed */
+.desmos-wrap {
+  position: relative;
+  width: 100%;
+  margin: 0.85rem 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.desmos-title {
+  padding: 10px 14px 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+}
+.desmos-calc {
+  width: 100%;
+  height: 440px;
+}
+/* Shrink the Desmos branding watermark */
+.desmos-wrap .dcg-brand-logo {
+  transform: scale(0.7);
+  transform-origin: bottom right;
+  opacity: 0.45;
+}
+
 .three-wrap {
   position: relative;
   width: 100%;
