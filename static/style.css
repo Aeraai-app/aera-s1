@@ -1910,7 +1910,7 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
 /* Body — fills remaining panel space for Excalidraw */
 .teach-panel-body {
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
   padding: 0;
   position: relative;
   min-height: 0; /* allow flex child to shrink */

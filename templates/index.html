@@ -11,7 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.desmos.com/api/v1.11/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>
   <script>window.EXCALIDRAW_ASSET_PATH="https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/";</script>
-  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/","react":"https://esm.sh/react@19.0.0","react/jsx-runtime":"https://esm.sh/react@19.0.0/jsx-runtime","react-dom":"https://esm.sh/react-dom@19.0.0"}}</script>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/","react":"https://esm.sh/react@19.0.0","react/jsx-runtime":"https://esm.sh/react@19.0.0/jsx-runtime","react-dom":"https://esm.sh/react-dom@19.0.0","react-dom/client":"https://esm.sh/react-dom@19.0.0/client"}}</script>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -21,7 +21,7 @@
   </script>
   <script type="module">
     import React from 'react';
-    import ReactDOM from 'react-dom';
+    import { createRoot } from 'react-dom/client';
     import * as ExcalidrawLib from 'https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/dev/index.js?external=react,react-dom';
 
     let _excalRoot = null;
@@ -29,7 +29,7 @@
     window._mountExcalidraw = function(container) {
       if (_excalRoot) return;
       var isDark = document.documentElement.getAttribute("data-theme") !== "light";
-      _excalRoot = ReactDOM.createRoot(container);
+      _excalRoot = createRoot(container);
       _excalRoot.render(
         React.createElement(ExcalidrawLib.Excalidraw, {
           theme: isDark ? "dark" : "light",
