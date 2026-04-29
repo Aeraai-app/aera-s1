@@ -31,7 +31,23 @@
       var isDark = document.documentElement.getAttribute("data-theme") !== "light";
       _excalRoot = ReactDOM.createRoot(container);
       _excalRoot.render(
-        React.createElement(ExcalidrawLib.Excalidraw, { theme: isDark ? "dark" : "light" })
+        React.createElement(ExcalidrawLib.Excalidraw, {
+          theme: isDark ? "dark" : "light",
+          initialData: {
+            appState: {
+              viewBackgroundColor: isDark ? "#1e1e1e" : "#ffffff",
+              currentItemStrokeColor: isDark ? "#ffffff" : "#1e1e1e",
+              currentItemBackgroundColor: "transparent",
+              currentItemFontSize: 20,
+              currentItemRoundness: "round",
+            },
+          },
+          UIOptions: {
+            canvasActions: {
+              toggleTheme: false,
+            },
+          },
+        })
       );
     };
 

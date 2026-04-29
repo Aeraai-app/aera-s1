@@ -1913,6 +1913,7 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
   overflow: hidden;
   padding: 0;
   position: relative;
+  min-height: 0; /* allow flex child to shrink */
 }
 
 /* Excalidraw container — fills the panel body */
@@ -1920,9 +1921,22 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
   width: 100%;
   height: 100%;
 }
+/* Excalidraw root must also fill */
+#teaching-content .excalidraw-container,
+#teaching-content .excalidraw {
+  width: 100% !important;
+  height: 100% !important;
+}
 
 /* Keep close button visible above Excalidraw toolbar */
 .teach-panel .teach-close { z-index: 10; }
+
+/* Excalidraw dark theme overrides to match panel */
+.teach-panel .excalidraw.theme--dark {
+  --color-surface-low: #1e1e1e;
+  --color-surface-mid: #252525;
+  --color-surface-high: #2c2c2c;
+}
 
 /* Mobile responsive */
 @media (max-width: 768px) {
