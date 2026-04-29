@@ -7,15 +7,39 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/dev/index.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.desmos.com/api/v1.11/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>
-  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"}}</script>
+  <script>window.EXCALIDRAW_ASSET_PATH="https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/prod/";</script>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/","react":"https://esm.sh/react@19.0.0","react/jsx-runtime":"https://esm.sh/react@19.0.0/jsx-runtime","react-dom":"https://esm.sh/react-dom@19.0.0"}}</script>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     /* Store as plain objects on window — Module Namespace objects are non-extensible */
     window._THREE = { ...THREE };
     window._OrbitControls = OrbitControls;
+  </script>
+  <script type="module">
+    import React from 'react';
+    import ReactDOM from 'react-dom';
+    import * as ExcalidrawLib from 'https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/dev/index.js?external=react,react-dom';
+
+    let _excalRoot = null;
+
+    window._mountExcalidraw = function(container) {
+      if (_excalRoot) return;
+      var isDark = document.documentElement.getAttribute("data-theme") !== "light";
+      _excalRoot = ReactDOM.createRoot(container);
+      _excalRoot.render(
+        React.createElement(ExcalidrawLib.Excalidraw, { theme: isDark ? "dark" : "light" })
+      );
+    };
+
+    window._unmountExcalidraw = function() {
+      if (_excalRoot) { _excalRoot.unmount(); _excalRoot = null; }
+    };
+
+    window._excalidrawReady = true;
   </script>
   {% if clerk_key and clerk_domain %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://{{ clerk_domain }}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" type="text/javascript"></script>{% endif %}
 </head>
@@ -317,8 +341,7 @@
   <button class="teach-close" id="teach-close" title="Close panel">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
   </button>
-  <div class="teach-panel-body">
-    <p class="teach-placeholder">Teaching Panel</p>
+  <div class="teach-panel-body" id="teach-panel-body">
     <div id="teaching-content"></div>
   </div>
 </div>
@@ -1103,6 +1126,12 @@ function openTeachPanel() {
   panel.style.width = _teachPanelWidth + "px";
   panel.classList.add("open");
   if (main) main.style.marginRight = _teachPanelWidth + "px";
+
+  /* Mount Excalidraw into the panel */
+  var tc = document.getElementById("teaching-content");
+  if (tc && window._mountExcalidraw) {
+    window._mountExcalidraw(tc);
+  }
 }
 
 function closeTeachPanel() {
@@ -1111,6 +1140,9 @@ function closeTeachPanel() {
   var main  = document.querySelector(".main");
   if (panel) panel.classList.remove("open");
   if (main) main.style.marginRight = "";
+
+  /* Unmount Excalidraw to free resources */
+  if (window._unmountExcalidraw) window._unmountExcalidraw();
 }
 
 /* Resize handle drag — deferred to DOMContentLoaded */
@@ -1128,6 +1160,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (!dragging) return;
     _teachPanelWidth = _clampTeachWidth(window.innerWidth - e.clientX);
     _applyTeachWidth();
+    window.dispatchEvent(new Event("resize")); /* tell Excalidraw to recalc */
   });
   document.addEventListener("mouseup", function() {
     if (dragging) { dragging = false; document.body.classList.remove("teach-dragging"); }
@@ -1773,8 +1806,6 @@ async function sendHomeMessage() {
 
     /* Open teaching panel if backend flagged this as a teaching request */
     if (data.openTeachingPanel && !data.error) {
-      var tc = document.getElementById("teaching-content");
-      if (tc) tc.innerHTML = '<div style="white-space:pre-wrap">' + renderBold(answer) + '</div>';
       openTeachPanel();
     }
   } catch {

@@ -1907,19 +1907,22 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
 }
 .teach-close:hover { background: #333; }
 
-/* Body */
+/* Body — fills remaining panel space for Excalidraw */
 .teach-panel-body {
   flex: 1;
-  overflow-y: auto;
-  padding: 48px 24px 24px;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
 }
 
-/* Placeholder text */
-.teach-placeholder {
-  font-size: 0.92rem;
-  color: #e0e0e0;
-  font-weight: 500;
+/* Excalidraw container — fills the panel body */
+#teaching-content {
+  width: 100%;
+  height: 100%;
 }
+
+/* Keep close button visible above Excalidraw toolbar */
+.teach-panel .teach-close { z-index: 10; }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
