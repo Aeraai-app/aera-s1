@@ -1637,7 +1637,20 @@ def ask():
             if q_fingerprint not in user_model["quiz_questions_asked"]:
                 user_model["quiz_questions_asked"].append(q_fingerprint)
 
-        return jsonify({"answer": answer})
+        # Detect teaching-style requests (case-insensitive)
+        _TEACH_TRIGGERS = [
+            "teach me", "explain", "how does", "how do i",
+            "show me how", "help me understand", "walk me through",
+            "solve", "learn", "i'm stuck", "im stuck",
+            "i don't understand", "i dont understand",
+            "can you help", "what is", "what are",
+        ]
+        open_panel = False
+        if last_user_msg:
+            low = last_user_msg.lower()
+            open_panel = any(t in low for t in _TEACH_TRIGGERS)
+
+        return jsonify({"answer": answer, "openTeachingPanel": open_panel})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
