@@ -1650,10 +1650,97 @@ def ask():
             low = last_user_msg.lower()
             open_panel = any(t in low for t in _TEACH_TRIGGERS)
 
-        return jsonify({"answer": answer, "openTeachingPanel": open_panel})
+        # Generate draw commands for teaching panel when teaching is detected
+        draw_commands = []
+        if open_panel:
+            draw_commands = _generate_draw_commands(answer)
+
+        return jsonify({
+            "answer": answer,
+            "openTeachingPanel": open_panel,
+            "drawCommands": draw_commands,
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _generate_draw_commands(answer):
+    """Parse AI answer for key concepts and generate simple diagram elements."""
+    import re
+    commands = []
+    lines = answer.split("\n")
+
+    # Collect bold terms as diagram nodes
+    bold_terms = re.findall(r"\*\*(.+?)\*\*", answer)
+    # Deduplicate while preserving order
+    seen = set()
+    unique_terms = []
+    for t in bold_terms:
+        low = t.lower().strip()
+        if low not in seen and len(t) < 40:
+            seen.add(low)
+            unique_terms.append(t.strip())
+        if len(unique_terms) >= 6:
+            break
+
+    if not unique_terms:
+        return commands
+
+    # Layout: arrange as a vertical flow diagram
+    start_x, start_y = 80, 60
+    spacing_y = 140
+    box_w, box_h = 220, 60
+
+    for i, term in enumerate(unique_terms):
+        cx = start_x
+        cy = start_y + i * spacing_y
+
+        # Draw box for each concept
+        commands.append({
+            "type": "rectangle",
+            "x": cx, "y": cy,
+            "width": box_w, "height": box_h,
+            "color": "#a5d8ff",
+            "fill": "transparent",
+            "label": term,
+            "strokeWidth": 2,
+        })
+
+        # Draw arrow connecting to next box
+        if i < len(unique_terms) - 1:
+            commands.append({
+                "type": "arrow",
+                "from": [cx + box_w // 2, cy + box_h],
+                "to":   [cx + box_w // 2, cy + spacing_y],
+                "color": "#868e96",
+                "strokeWidth": 1,
+            })
+
+    return commands
+
+
+@app.route("/api/teaching/draw", methods=["POST"])
+def teaching_draw():
+    """Accept explicit draw commands for the teaching panel canvas."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No JSON body"}), 400
+
+    commands = data.get("commands", [])
+    if not isinstance(commands, list):
+        return jsonify({"error": "commands must be a list"}), 400
+
+    valid_types = {"arrow", "circle", "ellipse", "rectangle", "line", "text"}
+    validated = []
+    for cmd in commands:
+        if not isinstance(cmd, dict):
+            continue
+        if cmd.get("type") not in valid_types:
+            continue
+        validated.append(cmd)
+
+    return jsonify({"ok": True, "commands": validated, "count": len(validated)})
 
 
 @app.route("/reset-model", methods=["POST"])

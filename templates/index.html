@@ -25,13 +25,16 @@
     import * as ExcalidrawLib from 'https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/dev/index.js?external=react,react-dom';
 
     let _excalRoot = null;
+    let _excalAPI  = null;
 
     window._mountExcalidraw = function(container) {
       if (_excalRoot) return;
+      _excalAPI = null;
       var isDark = document.documentElement.getAttribute("data-theme") !== "light";
       _excalRoot = createRoot(container);
       _excalRoot.render(
         React.createElement(ExcalidrawLib.Excalidraw, {
+          excalidrawAPI: function(api) { _excalAPI = api; window._excalAPI = api; },
           theme: isDark ? "dark" : "light",
           initialData: {
             appState: {
@@ -53,6 +56,106 @@
 
     window._unmountExcalidraw = function() {
       if (_excalRoot) { _excalRoot.unmount(); _excalRoot = null; }
+      _excalAPI = null;
+      window._excalAPI = null;
+    };
+
+    /* Convert a draw command → Excalidraw element skeleton */
+    function _cmdToSkeleton(cmd) {
+      var base = {
+        strokeColor: cmd.color || "#ffffff",
+        strokeWidth: cmd.strokeWidth || 2,
+        backgroundColor: cmd.fill || "transparent",
+        fillStyle: cmd.fill && cmd.fill !== "transparent" ? "solid" : "hachure",
+        roughness: 0,
+        roundness: { type: 3 },
+      };
+      var t = cmd.type;
+
+      if (t === "rectangle") {
+        var x = (cmd.x != null ? cmd.x : (cmd.from || [0])[0]) || 0;
+        var y = (cmd.y != null ? cmd.y : (cmd.from || [0,0])[1]) || 0;
+        var sk = Object.assign({}, base, {
+          type: "rectangle",
+          x: x, y: y,
+          width: cmd.width || 160, height: cmd.height || 80,
+        });
+        if (cmd.label) sk.label = { text: cmd.label, fontSize: cmd.fontSize || 16, strokeColor: cmd.color || "#ffffff" };
+        return sk;
+      }
+
+      if (t === "circle" || t === "ellipse") {
+        var x = (cmd.x != null ? cmd.x : (cmd.from || [0])[0]) || 0;
+        var y = (cmd.y != null ? cmd.y : (cmd.from || [0,0])[1]) || 0;
+        var sk = Object.assign({}, base, {
+          type: "ellipse",
+          x: x, y: y,
+          width: cmd.width || cmd.radius * 2 || 120,
+          height: cmd.height || cmd.radius * 2 || 120,
+        });
+        if (cmd.label) sk.label = { text: cmd.label, fontSize: cmd.fontSize || 16, strokeColor: cmd.color || "#ffffff" };
+        return sk;
+      }
+
+      if (t === "arrow") {
+        var fx = (cmd.from || [0, 0])[0];
+        var fy = (cmd.from || [0, 0])[1];
+        var tx = (cmd.to || [200, 0])[0];
+        var ty = (cmd.to || [200, 0])[1];
+        var sk = Object.assign({}, base, {
+          type: "arrow",
+          x: fx, y: fy,
+          width: tx - fx, height: ty - fy,
+          points: [[0, 0], [tx - fx, ty - fy]],
+          startArrowhead: null,
+          endArrowhead: "triangle",
+        });
+        if (cmd.label) sk.label = { text: cmd.label, fontSize: cmd.fontSize || 14, strokeColor: cmd.color || "#ffffff" };
+        return sk;
+      }
+
+      if (t === "line") {
+        var fx = (cmd.from || [0, 0])[0];
+        var fy = (cmd.from || [0, 0])[1];
+        var tx = (cmd.to || [200, 0])[0];
+        var ty = (cmd.to || [200, 0])[1];
+        return Object.assign({}, base, {
+          type: "line",
+          x: fx, y: fy,
+          points: [[0, 0], [tx - fx, ty - fy]],
+        });
+      }
+
+      if (t === "text") {
+        return {
+          type: "text",
+          x: (cmd.x != null ? cmd.x : (cmd.from || [0])[0]) || 0,
+          y: (cmd.y != null ? cmd.y : (cmd.from || [0,0])[1]) || 0,
+          text: cmd.text || cmd.label || "",
+          fontSize: cmd.fontSize || 20,
+          strokeColor: cmd.color || "#ffffff",
+          roughness: 0,
+        };
+      }
+
+      return null;
+    }
+
+    /* Public: draw an array of commands onto the canvas */
+    window._drawOnExcalidraw = function(commands) {
+      if (!_excalAPI || !commands || !commands.length) return;
+      if (!ExcalidrawLib.convertToExcalidrawElements) return;
+
+      var skeletons = [];
+      for (var i = 0; i < commands.length; i++) {
+        var sk = _cmdToSkeleton(commands[i]);
+        if (sk) skeletons.push(sk);
+      }
+      if (!skeletons.length) return;
+
+      var newEls = ExcalidrawLib.convertToExcalidrawElements(skeletons);
+      var existing = _excalAPI.getSceneElements() || [];
+      _excalAPI.updateScene({ elements: existing.concat(newEls) });
     };
 
     window._excalidrawReady = true;
@@ -1132,8 +1235,18 @@ function _applyTeachWidth() {
   }
 }
 
-function openTeachPanel() {
-  if (_teachPanelOpen) return;
+let _pendingDrawCmds = [];
+
+function openTeachPanel(drawCommands) {
+  _pendingDrawCmds = drawCommands || [];
+  if (_teachPanelOpen) {
+    /* Panel already open — just draw the new commands */
+    if (_pendingDrawCmds.length && window._drawOnExcalidraw) {
+      window._drawOnExcalidraw(_pendingDrawCmds);
+      _pendingDrawCmds = [];
+    }
+    return;
+  }
   _teachPanelOpen = true;
   var panel = document.getElementById("teach-panel");
   var main  = document.querySelector(".main");
@@ -1146,7 +1259,8 @@ function openTeachPanel() {
   /* Wait for slide-in transition to finish, then:
      1. Remove transform (translateX(0) creates a containing block that
         offsets Excalidraw's pointer coordinate calculations)
-     2. Mount Excalidraw (so it caches the correct canvas position) */
+     2. Mount Excalidraw (so it caches the correct canvas position)
+     3. Execute any queued draw commands after a short delay */
   function onDone(e) {
     if (e && e.propertyName !== "transform") return;
     panel.removeEventListener("transitionend", onDone);
@@ -1155,6 +1269,13 @@ function openTeachPanel() {
     if (tc && window._mountExcalidraw) {
       window._mountExcalidraw(tc);
       window.dispatchEvent(new Event("resize"));
+      /* Execute draw commands once Excalidraw is ready */
+      if (_pendingDrawCmds.length) {
+        setTimeout(function() {
+          if (window._drawOnExcalidraw) window._drawOnExcalidraw(_pendingDrawCmds);
+          _pendingDrawCmds = [];
+        }, 300);
+      }
     }
   }
   panel.addEventListener("transitionend", onDone);
@@ -1839,7 +1960,7 @@ async function sendHomeMessage() {
 
     /* Open teaching panel if backend flagged this as a teaching request */
     if (data.openTeachingPanel && !data.error) {
-      openTeachPanel();
+      openTeachPanel(data.drawCommands || []);
     }
   } catch {
     typing.remove();
