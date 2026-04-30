@@ -1143,22 +1143,39 @@ function openTeachPanel() {
   panel.classList.add("open");
   if (main) main.style.marginRight = _teachPanelWidth + "px";
 
-  /* Mount Excalidraw into the panel */
-  var tc = document.getElementById("teaching-content");
-  if (tc && window._mountExcalidraw) {
-    window._mountExcalidraw(tc);
+  /* Wait for slide-in transition to finish, then:
+     1. Remove transform (translateX(0) creates a containing block that
+        offsets Excalidraw's pointer coordinate calculations)
+     2. Mount Excalidraw (so it caches the correct canvas position) */
+  function onDone(e) {
+    if (e && e.propertyName !== "transform") return;
+    panel.removeEventListener("transitionend", onDone);
+    panel.style.transform = "none";
+    var tc = document.getElementById("teaching-content");
+    if (tc && window._mountExcalidraw) {
+      window._mountExcalidraw(tc);
+      window.dispatchEvent(new Event("resize"));
+    }
   }
+  panel.addEventListener("transitionend", onDone);
 }
 
 function closeTeachPanel() {
   _teachPanelOpen = false;
   var panel = document.getElementById("teach-panel");
   var main  = document.querySelector(".main");
-  if (panel) panel.classList.remove("open");
-  if (main) main.style.marginRight = "";
 
-  /* Unmount Excalidraw to free resources */
+  /* Unmount Excalidraw first (before transform changes) */
   if (window._unmountExcalidraw) window._unmountExcalidraw();
+
+  if (panel) {
+    /* Restore CSS transform for close animation:
+       clear inline "none" → CSS .open gives translateX(0) → remove .open → animates to translateX(100%) */
+    panel.style.transform = "";
+    panel.offsetHeight; /* force reflow so browser registers translateX(0) */
+    panel.classList.remove("open");
+  }
+  if (main) main.style.marginRight = "";
 }
 
 /* Resize handle drag — deferred to DOMContentLoaded */
