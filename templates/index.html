@@ -24,17 +24,25 @@
     import { createRoot } from 'react-dom/client';
     import * as ExcalidrawLib from 'https://esm.sh/@excalidraw/excalidraw@0.18.0/dist/dev/index.js?external=react,react-dom';
 
+    console.log('[Excalidraw] Module loaded. Exports:', Object.keys(ExcalidrawLib));
+    console.log('[Excalidraw] convertToExcalidrawElements:', typeof ExcalidrawLib.convertToExcalidrawElements);
+
     let _excalRoot = null;
     let _excalAPI  = null;
 
     window._mountExcalidraw = function(container) {
-      if (_excalRoot) return;
+      console.log('[Excalidraw] _mountExcalidraw called');
+      if (_excalRoot) { console.log('[Excalidraw] Already mounted, skip'); return; }
       _excalAPI = null;
       var isDark = document.documentElement.getAttribute("data-theme") !== "light";
       _excalRoot = createRoot(container);
       _excalRoot.render(
         React.createElement(ExcalidrawLib.Excalidraw, {
-          excalidrawAPI: function(api) { _excalAPI = api; window._excalAPI = api; },
+          excalidrawAPI: function(api) {
+            _excalAPI = api;
+            window._excalAPI = api;
+            console.log('[Excalidraw] API callback fired, ready:', !!api);
+          },
           theme: isDark ? "dark" : "light",
           initialData: {
             appState: {
@@ -52,12 +60,31 @@
           },
         })
       );
+      console.log('[Excalidraw] render() called');
     };
 
     window._unmountExcalidraw = function() {
+      console.log('[Excalidraw] Unmounting');
       if (_excalRoot) { _excalRoot.unmount(); _excalRoot = null; }
       _excalAPI = null;
       window._excalAPI = null;
+    };
+
+    /* Poll until Excalidraw API is ready, then call callback */
+    window._waitForExcalAPI = function(callback, maxRetries) {
+      maxRetries = maxRetries || 30;
+      var attempts = 0;
+      var timer = setInterval(function() {
+        attempts++;
+        if (_excalAPI) {
+          clearInterval(timer);
+          console.log('[Excalidraw] API ready after', attempts, 'polls');
+          callback(_excalAPI);
+        } else if (attempts >= maxRetries) {
+          clearInterval(timer);
+          console.error('[Excalidraw] API NOT ready after', maxRetries, 'polls — giving up');
+        }
+      }, 150);
     };
 
     /* Convert a draw command → Excalidraw element skeleton */
@@ -143,19 +170,51 @@
 
     /* Public: draw an array of commands onto the canvas */
     window._drawOnExcalidraw = function(commands) {
-      if (!_excalAPI || !commands || !commands.length) return;
-      if (!ExcalidrawLib.convertToExcalidrawElements) return;
+      console.log('[Excalidraw] _drawOnExcalidraw called, commands:', JSON.stringify(commands));
+      if (!_excalAPI) { console.error('[Excalidraw] DRAW ABORT: _excalAPI is null'); return; }
+      if (!commands || !commands.length) { console.warn('[Excalidraw] DRAW ABORT: no commands'); return; }
+
+      var hasConvert = typeof ExcalidrawLib.convertToExcalidrawElements === 'function';
+      console.log('[Excalidraw] convertToExcalidrawElements available:', hasConvert);
+
+      if (!hasConvert) {
+        console.error('[Excalidraw] convertToExcalidrawElements NOT FOUND. Keys:', Object.keys(ExcalidrawLib));
+        return;
+      }
 
       var skeletons = [];
       for (var i = 0; i < commands.length; i++) {
         var sk = _cmdToSkeleton(commands[i]);
-        if (sk) skeletons.push(sk);
+        if (sk) { skeletons.push(sk); }
+        else { console.warn('[Excalidraw] Skeleton null for cmd', i, commands[i]); }
       }
-      if (!skeletons.length) return;
+      console.log('[Excalidraw] Skeletons:', JSON.stringify(skeletons));
+      if (!skeletons.length) { console.warn('[Excalidraw] No valid skeletons'); return; }
 
-      var newEls = ExcalidrawLib.convertToExcalidrawElements(skeletons);
-      var existing = _excalAPI.getSceneElements() || [];
-      _excalAPI.updateScene({ elements: existing.concat(newEls) });
+      try {
+        var newEls = ExcalidrawLib.convertToExcalidrawElements(skeletons);
+        console.log('[Excalidraw] Converted', newEls.length, 'elements');
+        var existing = _excalAPI.getSceneElements() || [];
+        _excalAPI.updateScene({ elements: existing.concat(newEls) });
+        console.log('[Excalidraw] updateScene done, total elements:', existing.length + newEls.length);
+        /* Scroll to show drawn content */
+        setTimeout(function() {
+          if (_excalAPI && _excalAPI.scrollToContent) {
+            _excalAPI.scrollToContent(newEls, { fitToViewport: true, viewportZoomFactor: 0.8 });
+          }
+        }, 100);
+      } catch (err) {
+        console.error('[Excalidraw] Draw error:', err);
+      }
+    };
+
+    /* Test: draw one hardcoded blue circle — call from console or auto on panel open */
+    window._testDraw = function() {
+      console.log('[Excalidraw] _testDraw called, API:', !!_excalAPI);
+      if (!_excalAPI) { console.error('[Excalidraw] testDraw: no API'); return; }
+      window._drawOnExcalidraw([
+        { type: "ellipse", x: 200, y: 200, width: 150, height: 150, color: "#a5d8ff", fill: "#a5d8ff", strokeWidth: 2 }
+      ]);
     };
 
     window._excalidrawReady = true;
@@ -1238,12 +1297,21 @@ function _applyTeachWidth() {
 let _pendingDrawCmds = [];
 
 function openTeachPanel(drawCommands) {
+  console.log('[TeachPanel] openTeachPanel called, commands:', drawCommands ? drawCommands.length : 0);
   _pendingDrawCmds = drawCommands || [];
   if (_teachPanelOpen) {
-    /* Panel already open — just draw the new commands */
-    if (_pendingDrawCmds.length && window._drawOnExcalidraw) {
-      window._drawOnExcalidraw(_pendingDrawCmds);
-      _pendingDrawCmds = [];
+    console.log('[TeachPanel] Already open, drawing directly');
+    if (_pendingDrawCmds.length) {
+      if (window._excalAPI && window._drawOnExcalidraw) {
+        window._drawOnExcalidraw(_pendingDrawCmds);
+        _pendingDrawCmds = [];
+      } else if (window._waitForExcalAPI) {
+        var cmds = _pendingDrawCmds.slice();
+        _pendingDrawCmds = [];
+        window._waitForExcalAPI(function() {
+          window._drawOnExcalidraw(cmds);
+        });
+      }
     }
     return;
   }
@@ -1260,21 +1328,32 @@ function openTeachPanel(drawCommands) {
      1. Remove transform (translateX(0) creates a containing block that
         offsets Excalidraw's pointer coordinate calculations)
      2. Mount Excalidraw (so it caches the correct canvas position)
-     3. Execute any queued draw commands after a short delay */
+     3. Poll for API readiness, then draw test shape + queued commands */
+  var cmdsToExecute = _pendingDrawCmds.slice();
+  _pendingDrawCmds = [];
+
   function onDone(e) {
     if (e && e.propertyName !== "transform") return;
     panel.removeEventListener("transitionend", onDone);
     panel.style.transform = "none";
+    console.log('[TeachPanel] Transition done, mounting Excalidraw');
     var tc = document.getElementById("teaching-content");
     if (tc && window._mountExcalidraw) {
       window._mountExcalidraw(tc);
       window.dispatchEvent(new Event("resize"));
-      /* Execute draw commands once Excalidraw is ready */
-      if (_pendingDrawCmds.length) {
-        setTimeout(function() {
-          if (window._drawOnExcalidraw) window._drawOnExcalidraw(_pendingDrawCmds);
-          _pendingDrawCmds = [];
-        }, 300);
+
+      /* Poll until API is ready, then draw */
+      if (window._waitForExcalAPI) {
+        window._waitForExcalAPI(function() {
+          console.log('[TeachPanel] API ready — drawing test shape');
+          /* TEST: hardcoded blue circle to verify drawing pipeline */
+          if (window._testDraw) window._testDraw();
+          /* Then draw any backend commands */
+          if (cmdsToExecute.length && window._drawOnExcalidraw) {
+            console.log('[TeachPanel] Drawing', cmdsToExecute.length, 'backend commands');
+            window._drawOnExcalidraw(cmdsToExecute);
+          }
+        });
       }
     }
   }
