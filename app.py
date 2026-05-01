@@ -1654,6 +1654,7 @@ def ask():
         draw_commands = []
         if open_panel:
             draw_commands = _generate_draw_commands(answer, last_user_msg)
+            answer = _tag_answer_with_highlights(answer, draw_commands)
 
         return jsonify({
             "answer": answer,
@@ -1663,6 +1664,47 @@ def ask():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _tag_answer_with_highlights(answer, draw_commands):
+    """Wrap terms in the answer that match diagram labels with [[markers]]."""
+    import re
+    if not draw_commands:
+        return answer
+
+    # Collect usable labels from draw commands
+    labels = []
+    for cmd in draw_commands:
+        raw = cmd.get("label") or cmd.get("text", "")
+        if not raw:
+            continue
+        # Take text before parenthetical for cleaner matching
+        clean = re.split(r"\s*[\(（]", raw)[0].strip()
+        if len(clean) >= 3:
+            labels.append(clean)
+
+    if not labels:
+        return answer
+
+    # Deduplicate, longest first so "Cell Membrane" matches before "Cell"
+    seen = set()
+    unique = []
+    for lab in sorted(labels, key=len, reverse=True):
+        low = lab.lower()
+        if low not in seen:
+            seen.add(low)
+            unique.append(lab)
+
+    for lab in unique:
+        # Match label in text (case-insensitive), but skip if already inside
+        # **bold** markers or [[highlight]] markers
+        pattern = re.compile(
+            r"(?<!\[)(?<!\*)" + re.escape(lab) + r"(?!\])(?!\*)",
+            re.IGNORECASE,
+        )
+        answer = pattern.sub("[[" + lab + "]]", answer, count=2)
+
+    return answer
 
 
 def _generate_draw_commands(answer, user_msg):

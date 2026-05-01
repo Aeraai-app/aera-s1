@@ -1932,6 +1932,27 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
   --color-surface-high: #2c2c2c;
 }
 
+/* ── Highlight references (chat ↔ canvas sync) ────── */
+.hl-ref {
+  color: #ffd43b;
+  cursor: pointer;
+  border-bottom: 1.5px dashed rgba(255, 212, 59, 0.45);
+  padding-bottom: 1px;
+  transition: color 0.2s, border-color 0.2s;
+}
+.hl-ref:hover {
+  color: #ffe066;
+  border-bottom-color: #ffe066;
+}
+[data-theme="light"] .hl-ref {
+  color: #e67700;
+  border-bottom-color: rgba(230, 119, 0, 0.45);
+}
+[data-theme="light"] .hl-ref:hover {
+  color: #d9480f;
+  border-bottom-color: #d9480f;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .teach-panel { width: 90vw !important; }
