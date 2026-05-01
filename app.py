@@ -1653,7 +1653,7 @@ def ask():
         # Generate draw commands for teaching panel when teaching is detected
         draw_commands = []
         if open_panel:
-            draw_commands = _generate_draw_commands(answer)
+            draw_commands = _generate_draw_commands(answer, last_user_msg)
 
         return jsonify({
             "answer": answer,
@@ -1665,57 +1665,334 @@ def ask():
         return jsonify({"error": str(e)}), 500
 
 
-def _generate_draw_commands(answer):
-    """Parse AI answer for key concepts and generate simple diagram elements."""
-    import re
-    commands = []
-    lines = answer.split("\n")
+def _generate_draw_commands(answer, user_msg):
+    """Pick a preset diagram based on topic, or build one from bold terms."""
+    low = (user_msg or "").lower()
 
-    # Collect bold terms as diagram nodes
+    # ── Preset: Cell Biology ──────────────────────────────────────
+    if any(k in low for k in ["cell", "mitochondria", "organelle", "nucleus",
+                               "biology", "membrane", "cytoplasm"]):
+        return _diagram_cell_biology()
+
+    # ── Preset: Newton's Laws / Forces ────────────────────────────
+    if any(k in low for k in ["newton", "force", "motion", "gravity",
+                               "acceleration", "physics", "velocity",
+                               "momentum", "inertia"]):
+        return _diagram_newtons_laws()
+
+    # ── Preset: Math – Order of Operations / Equations ────────────
+    if any(k in low for k in ["math", "equation", "pemdas", "order of operations",
+                               "algebra", "quadratic", "formula", "solve for",
+                               "calculate"]):
+        return _diagram_math_order()
+
+    # ── Preset: Water Cycle ───────────────────────────────────────
+    if any(k in low for k in ["water cycle", "evaporation", "condensation",
+                               "precipitation", "weather", "climate"]):
+        return _diagram_water_cycle()
+
+    # ── Preset: Photosynthesis ────────────────────────────────────
+    if any(k in low for k in ["photosynthesis", "chlorophyll", "chloroplast",
+                               "plant", "sunlight", "glucose"]):
+        return _diagram_photosynthesis()
+
+    # ── Fallback: build a flow chart from bold terms in the answer ─
+    return _diagram_from_bold_terms(answer)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  Preset diagrams
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _diagram_cell_biology():
+    """Animal cell diagram – central nucleus with organelles around it."""
+    c = []
+    # Outer cell membrane
+    c.append({"type": "ellipse", "x": 40, "y": 20, "width": 400, "height": 340,
+              "color": "#74c0fc", "strokeWidth": 3, "fill": "transparent"})
+    c.append({"type": "text", "x": 150, "y": 370, "text": "Cell Membrane",
+              "color": "#74c0fc", "fontSize": 16})
+
+    # Nucleus (center)
+    c.append({"type": "ellipse", "x": 140, "y": 100, "width": 180, "height": 140,
+              "color": "#b197fc", "strokeWidth": 2, "fill": "transparent"})
+    c.append({"type": "text", "x": 190, "y": 155, "text": "Nucleus",
+              "color": "#b197fc", "fontSize": 18})
+
+    # Nucleolus
+    c.append({"type": "ellipse", "x": 195, "y": 145, "width": 50, "height": 40,
+              "color": "#e599f7", "strokeWidth": 1, "fill": "transparent"})
+
+    # Mitochondria (right)
+    c.append({"type": "ellipse", "x": 340, "y": 130, "width": 80, "height": 50,
+              "color": "#ff8787", "strokeWidth": 2, "fill": "transparent"})
+    c.append({"type": "text", "x": 335, "y": 185, "text": "Mitochondria",
+              "color": "#ff8787", "fontSize": 13})
+
+    # ER (left)
+    c.append({"type": "rectangle", "x": 55, "y": 140, "width": 70, "height": 90,
+              "color": "#69db7c", "strokeWidth": 1, "fill": "transparent"})
+    c.append({"type": "text", "x": 50, "y": 237, "text": "ER",
+              "color": "#69db7c", "fontSize": 13})
+
+    # Golgi (bottom-right)
+    c.append({"type": "rectangle", "x": 320, "y": 250, "width": 90, "height": 50,
+              "color": "#ffd43b", "strokeWidth": 2, "fill": "transparent"})
+    c.append({"type": "text", "x": 320, "y": 305, "text": "Golgi Body",
+              "color": "#ffd43b", "fontSize": 13})
+
+    # Ribosome dots (top-left area)
+    c.append({"type": "ellipse", "x": 80, "y": 60, "width": 12, "height": 12,
+              "color": "#868e96", "strokeWidth": 1, "fill": "#868e96"})
+    c.append({"type": "ellipse", "x": 100, "y": 75, "width": 12, "height": 12,
+              "color": "#868e96", "strokeWidth": 1, "fill": "#868e96"})
+    c.append({"type": "text", "x": 60, "y": 45, "text": "Ribosomes",
+              "color": "#868e96", "fontSize": 12})
+
+    # Title
+    c.append({"type": "text", "x": 120, "y": -15, "text": "Animal Cell Structure",
+              "color": "#ffffff", "fontSize": 22})
+    return c
+
+
+def _diagram_newtons_laws():
+    """Newton's three laws – horizontal flow with arrows."""
+    c = []
+    bw, bh = 200, 80
+    gap = 80
+
+    # Title
+    c.append({"type": "text", "x": 120, "y": 10, "text": "Newton's Laws of Motion",
+              "color": "#ffffff", "fontSize": 22})
+
+    laws = [
+        ("1st Law", "An object at rest stays\nat rest unless acted on\nby a force", "#74c0fc"),
+        ("2nd Law", "F = m × a\nForce equals mass\ntimes acceleration", "#69db7c"),
+        ("3rd Law", "Every action has an\nequal and opposite\nreaction", "#ffa94d"),
+    ]
+
+    for i, (title, desc, color) in enumerate(laws):
+        x = 40
+        y = 60 + i * (bh + gap)
+
+        # Box
+        c.append({"type": "rectangle", "x": x, "y": y, "width": bw, "height": bh,
+                  "color": color, "strokeWidth": 2, "fill": "transparent",
+                  "label": title})
+
+        # Description text to the right
+        c.append({"type": "text", "x": x + bw + 30, "y": y + 15,
+                  "text": desc, "color": "#dee2e6", "fontSize": 15})
+
+        # Arrow to next law
+        if i < 2:
+            c.append({"type": "arrow",
+                       "from": [x + bw // 2, y + bh],
+                       "to":   [x + bw // 2, y + bh + gap],
+                       "color": "#868e96", "strokeWidth": 2})
+
+    # Force arrow illustration at bottom
+    y_bot = 60 + 2 * (bh + gap) + bh + 40
+    c.append({"type": "arrow", "from": [140, y_bot], "to": [340, y_bot],
+              "color": "#ff8787", "strokeWidth": 3, "label": "Action"})
+    c.append({"type": "arrow", "from": [340, y_bot + 40], "to": [140, y_bot + 40],
+              "color": "#74c0fc", "strokeWidth": 3, "label": "Reaction"})
+
+    return c
+
+
+def _diagram_math_order():
+    """PEMDAS order of operations – step-by-step descending."""
+    c = []
+    bw, bh = 240, 50
+    gap = 30
+
+    c.append({"type": "text", "x": 60, "y": 10,
+              "text": "Order of Operations (PEMDAS)", "color": "#ffffff", "fontSize": 22})
+
+    steps = [
+        ("P", "Parentheses  ( )", "#ff8787"),
+        ("E", "Exponents  x²", "#ffa94d"),
+        ("M / D", "Multiply & Divide  × ÷", "#ffd43b"),
+        ("A / S", "Add & Subtract  + −", "#69db7c"),
+    ]
+
+    for i, (letter, desc, color) in enumerate(steps):
+        y = 60 + i * (bh + gap)
+
+        # Step number circle
+        c.append({"type": "ellipse", "x": 40, "y": y + 5, "width": 40, "height": 40,
+                  "color": color, "strokeWidth": 2, "fill": "transparent",
+                  "label": letter})
+
+        # Description box
+        c.append({"type": "rectangle", "x": 100, "y": y, "width": bw, "height": bh,
+                  "color": color, "strokeWidth": 2, "fill": "transparent",
+                  "label": desc})
+
+        # Arrow down
+        if i < 3:
+            c.append({"type": "arrow",
+                       "from": [220, y + bh],
+                       "to":   [220, y + bh + gap],
+                       "color": "#868e96", "strokeWidth": 1})
+
+    # Example at bottom
+    ey = 60 + 4 * (bh + gap)
+    c.append({"type": "text", "x": 50, "y": ey,
+              "text": "Example:  2 + 3 × (4² − 1)", "color": "#dee2e6", "fontSize": 18})
+    c.append({"type": "text", "x": 50, "y": ey + 30,
+              "text": "= 2 + 3 × (16 − 1)", "color": "#adb5bd", "fontSize": 16})
+    c.append({"type": "text", "x": 50, "y": ey + 55,
+              "text": "= 2 + 3 × 15 = 2 + 45 = 47", "color": "#adb5bd", "fontSize": 16})
+
+    return c
+
+
+def _diagram_water_cycle():
+    """Water cycle – circular flow with labeled stages."""
+    c = []
+
+    c.append({"type": "text", "x": 120, "y": 10,
+              "text": "The Water Cycle", "color": "#ffffff", "fontSize": 22})
+
+    # Sun (top-left)
+    c.append({"type": "ellipse", "x": 20, "y": 40, "width": 60, "height": 60,
+              "color": "#ffd43b", "strokeWidth": 2, "fill": "#ffd43b"})
+    c.append({"type": "text", "x": 30, "y": 105, "text": "Sun",
+              "color": "#ffd43b", "fontSize": 14})
+
+    # Cloud (top-right)
+    c.append({"type": "ellipse", "x": 300, "y": 50, "width": 140, "height": 70,
+              "color": "#dee2e6", "strokeWidth": 2, "fill": "transparent"})
+    c.append({"type": "text", "x": 330, "y": 72, "text": "Cloud",
+              "color": "#dee2e6", "fontSize": 16})
+
+    # Water body (bottom)
+    c.append({"type": "rectangle", "x": 40, "y": 300, "width": 380, "height": 60,
+              "color": "#339af0", "strokeWidth": 2, "fill": "transparent",
+              "label": "Ocean / Lake"})
+
+    # Evaporation arrow (bottom-left up to cloud)
+    c.append({"type": "arrow", "from": [120, 300], "to": [310, 120],
+              "color": "#ff8787", "strokeWidth": 2, "label": "Evaporation"})
+
+    # Condensation label near cloud
+    c.append({"type": "text", "x": 300, "y": 130,
+              "text": "Condensation", "color": "#b197fc", "fontSize": 14})
+
+    # Precipitation arrow (cloud down to water)
+    c.append({"type": "arrow", "from": [380, 120], "to": [340, 300],
+              "color": "#74c0fc", "strokeWidth": 2, "label": "Precipitation"})
+
+    # Runoff arrow along bottom
+    c.append({"type": "arrow", "from": [420, 330], "to": [460, 250],
+              "color": "#69db7c", "strokeWidth": 2})
+    c.append({"type": "text", "x": 440, "y": 230, "text": "Runoff",
+              "color": "#69db7c", "fontSize": 14})
+
+    # Collection arrow back
+    c.append({"type": "arrow", "from": [460, 250], "to": [420, 320],
+              "color": "#868e96", "strokeWidth": 1})
+    c.append({"type": "text", "x": 420, "y": 365, "text": "Collection",
+              "color": "#868e96", "fontSize": 13})
+
+    return c
+
+
+def _diagram_photosynthesis():
+    """Photosynthesis equation – inputs on left, outputs on right."""
+    c = []
+
+    c.append({"type": "text", "x": 80, "y": 10,
+              "text": "Photosynthesis", "color": "#ffffff", "fontSize": 22})
+
+    # Inputs (left side)
+    inputs = [
+        ("Sunlight", "#ffd43b", 40, 80),
+        ("Water (H₂O)", "#74c0fc", 40, 170),
+        ("CO₂", "#adb5bd", 40, 260),
+    ]
+    for label, color, x, y in inputs:
+        c.append({"type": "rectangle", "x": x, "y": y, "width": 140, "height": 55,
+                  "color": color, "strokeWidth": 2, "fill": "transparent",
+                  "label": label})
+
+    # Central process circle
+    c.append({"type": "ellipse", "x": 230, "y": 130, "width": 130, "height": 100,
+              "color": "#69db7c", "strokeWidth": 3, "fill": "transparent"})
+    c.append({"type": "text", "x": 247, "y": 155, "text": "Chloroplast",
+              "color": "#69db7c", "fontSize": 16})
+    c.append({"type": "text", "x": 245, "y": 178, "text": "(light reaction)",
+              "color": "#69db7c", "fontSize": 12})
+
+    # Arrows from inputs to center
+    c.append({"type": "arrow", "from": [180, 107], "to": [230, 160],
+              "color": "#ffd43b", "strokeWidth": 2})
+    c.append({"type": "arrow", "from": [180, 197], "to": [230, 180],
+              "color": "#74c0fc", "strokeWidth": 2})
+    c.append({"type": "arrow", "from": [180, 287], "to": [230, 200],
+              "color": "#adb5bd", "strokeWidth": 2})
+
+    # Outputs (right side)
+    outputs = [
+        ("Glucose (C₆H₁₂O₆)", "#ffa94d", 420, 110),
+        ("Oxygen (O₂)", "#ff8787", 420, 220),
+    ]
+    for label, color, x, y in outputs:
+        c.append({"type": "rectangle", "x": x, "y": y, "width": 160, "height": 55,
+                  "color": color, "strokeWidth": 2, "fill": "transparent",
+                  "label": label})
+
+    # Arrows from center to outputs
+    c.append({"type": "arrow", "from": [360, 165], "to": [420, 137],
+              "color": "#ffa94d", "strokeWidth": 2, "label": "Energy stored"})
+    c.append({"type": "arrow", "from": [360, 195], "to": [420, 247],
+              "color": "#ff8787", "strokeWidth": 2, "label": "Released"})
+
+    # Equation at bottom
+    c.append({"type": "text", "x": 60, "y": 340,
+              "text": "6CO₂ + 6H₂O + Light → C₆H₁₂O₆ + 6O₂",
+              "color": "#dee2e6", "fontSize": 18})
+
+    return c
+
+
+def _diagram_from_bold_terms(answer):
+    """Fallback: build a vertical flow chart from **bold** terms in the AI answer."""
+    import re
     bold_terms = re.findall(r"\*\*(.+?)\*\*", answer)
-    # Deduplicate while preserving order
     seen = set()
-    unique_terms = []
+    unique = []
     for t in bold_terms:
         low = t.lower().strip()
         if low not in seen and len(t) < 40:
             seen.add(low)
-            unique_terms.append(t.strip())
-        if len(unique_terms) >= 6:
+            unique.append(t.strip())
+        if len(unique) >= 6:
             break
+    if not unique:
+        return []
 
-    if not unique_terms:
-        return commands
+    commands = []
+    bw, bh = 220, 55
+    gap = 70
+    sx = 80
 
-    # Layout: arrange as a vertical flow diagram
-    start_x, start_y = 80, 60
-    spacing_y = 140
-    box_w, box_h = 220, 60
+    commands.append({"type": "text", "x": sx, "y": 10,
+                     "text": "Key Concepts", "color": "#ffffff", "fontSize": 20})
 
-    for i, term in enumerate(unique_terms):
-        cx = start_x
-        cy = start_y + i * spacing_y
-
-        # Draw box for each concept
-        commands.append({
-            "type": "rectangle",
-            "x": cx, "y": cy,
-            "width": box_w, "height": box_h,
-            "color": "#a5d8ff",
-            "fill": "transparent",
-            "label": term,
-            "strokeWidth": 2,
-        })
-
-        # Draw arrow connecting to next box
-        if i < len(unique_terms) - 1:
-            commands.append({
-                "type": "arrow",
-                "from": [cx + box_w // 2, cy + box_h],
-                "to":   [cx + box_w // 2, cy + spacing_y],
-                "color": "#868e96",
-                "strokeWidth": 1,
-            })
+    for i, term in enumerate(unique):
+        y = 50 + i * (bh + gap)
+        commands.append({"type": "rectangle", "x": sx, "y": y,
+                         "width": bw, "height": bh,
+                         "color": "#a5d8ff", "strokeWidth": 2, "fill": "transparent",
+                         "label": term})
+        if i < len(unique) - 1:
+            commands.append({"type": "arrow",
+                             "from": [sx + bw // 2, y + bh],
+                             "to":   [sx + bw // 2, y + bh + gap],
+                             "color": "#868e96", "strokeWidth": 1})
 
     return commands
 

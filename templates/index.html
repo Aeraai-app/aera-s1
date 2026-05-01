@@ -208,15 +208,6 @@
       }
     };
 
-    /* Test: draw one hardcoded blue circle — call from console or auto on panel open */
-    window._testDraw = function() {
-      console.log('[Excalidraw] _testDraw called, API:', !!_excalAPI);
-      if (!_excalAPI) { console.error('[Excalidraw] testDraw: no API'); return; }
-      window._drawOnExcalidraw([
-        { type: "ellipse", x: 200, y: 200, width: 150, height: 150, color: "#a5d8ff", fill: "#a5d8ff", strokeWidth: 2 }
-      ]);
-    };
-
     window._excalidrawReady = true;
   </script>
   {% if clerk_key and clerk_domain %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://{{ clerk_domain }}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" type="text/javascript"></script>{% endif %}
@@ -1342,17 +1333,11 @@ function openTeachPanel(drawCommands) {
       window._mountExcalidraw(tc);
       window.dispatchEvent(new Event("resize"));
 
-      /* Poll until API is ready, then draw */
-      if (window._waitForExcalAPI) {
+      /* Poll until API is ready, then draw backend commands */
+      if (cmdsToExecute.length && window._waitForExcalAPI) {
         window._waitForExcalAPI(function() {
-          console.log('[TeachPanel] API ready — drawing test shape');
-          /* TEST: hardcoded blue circle to verify drawing pipeline */
-          if (window._testDraw) window._testDraw();
-          /* Then draw any backend commands */
-          if (cmdsToExecute.length && window._drawOnExcalidraw) {
-            console.log('[TeachPanel] Drawing', cmdsToExecute.length, 'backend commands');
-            window._drawOnExcalidraw(cmdsToExecute);
-          }
+          console.log('[TeachPanel] API ready — drawing', cmdsToExecute.length, 'commands');
+          if (window._drawOnExcalidraw) window._drawOnExcalidraw(cmdsToExecute);
         });
       }
     }
