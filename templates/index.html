@@ -30,10 +30,19 @@
     let _excalRoot = null;
     let _excalAPI  = null;
 
+    /* ── Selection tracking state ── */
+    var _lastSelKey = "";
+    var _selHlId = null;
+    var _selOriginal = null;
+    var _selBusy = false;
+
     window._mountExcalidraw = function(container) {
       console.log('[Excalidraw] _mountExcalidraw called');
       if (_excalRoot) { console.log('[Excalidraw] Already mounted, skip'); return; }
       _excalAPI = null;
+      _lastSelKey = "";
+      _selHlId = null;
+      _selOriginal = null;
       var isDark = document.documentElement.getAttribute("data-theme") !== "light";
       _excalRoot = createRoot(container);
       _excalRoot.render(
@@ -43,6 +52,7 @@
             window._excalAPI = api;
             console.log('[Excalidraw] API callback fired, ready:', !!api);
           },
+          onChange: _handleSelectionChange,
           theme: isDark ? "dark" : "light",
           initialData: {
             appState: {
@@ -68,6 +78,9 @@
       if (_excalRoot) { _excalRoot.unmount(); _excalRoot = null; }
       _excalAPI = null;
       window._excalAPI = null;
+      _lastSelKey = "";
+      _selHlId = null;
+      _selOriginal = null;
     };
 
     /* Poll until Excalidraw API is ready, then call callback */
@@ -278,6 +291,154 @@
         _excalAPI.updateScene({ elements: reverted });
       }, 2500);
     };
+
+    /* ── Click-to-select: detect selection changes on canvas ── */
+    function _handleSelectionChange(elements, appState) {
+      if (_selBusy || !_excalAPI) return;
+
+      /* Only act when the pointer/selection tool is active */
+      var tool = appState.activeTool;
+      if (tool && tool.type !== "selection") return;
+
+      var selIds = appState.selectedElementIds || {};
+      var keys = Object.keys(selIds).filter(function(k) { return selIds[k]; });
+      var selKey = keys.length === 1 ? keys[0] : "";
+
+      if (selKey === _lastSelKey) return;
+      _lastSelKey = selKey;
+      _selBusy = true;
+
+      /* Revert previous persistent highlight */
+      if (_selHlId && _selOriginal) {
+        var cur = _excalAPI.getSceneElements() || [];
+        var rev = cur.map(function(el) {
+          if (el.id === _selHlId) {
+            return Object.assign({}, el, {
+              strokeColor: _selOriginal.strokeColor,
+              strokeWidth: _selOriginal.strokeWidth,
+              version: (el.version || 1) + 1,
+            });
+          }
+          return el;
+        });
+        _excalAPI.updateScene({ elements: rev });
+        _selHlId = null;
+        _selOriginal = null;
+      }
+
+      if (!selKey) { setTimeout(function(){ _selBusy = false; }, 60); return; }
+
+      /* Find the clicked element */
+      var allEls = _excalAPI.getSceneElements() || [];
+      var selEl = null;
+      for (var i = 0; i < allEls.length; i++) {
+        if (allEls[i].id === selKey) { selEl = allEls[i]; break; }
+      }
+      if (!selEl) { setTimeout(function(){ _selBusy = false; }, 60); return; }
+
+      /* Resolve a meaningful label */
+      var info = _findLabelForElement(selEl, allEls);
+      if (!info) { setTimeout(function(){ _selBusy = false; }, 60); return; }
+
+      /* Decide which element to highlight (prefer shape over text) */
+      var hlId = selKey;
+      if (selEl.type === "text") {
+        var parent = _findParentShape(selEl, allEls);
+        if (parent) hlId = parent;
+      }
+      var hlEl = null;
+      for (var i = 0; i < allEls.length; i++) {
+        if (allEls[i].id === hlId) { hlEl = allEls[i]; break; }
+      }
+
+      /* Apply persistent yellow highlight on the shape */
+      if (hlEl && hlEl.type !== "text") {
+        _selHlId = hlId;
+        _selOriginal = { strokeColor: hlEl.strokeColor, strokeWidth: hlEl.strokeWidth };
+        var hl = allEls.map(function(el) {
+          if (el.id === hlId) {
+            return Object.assign({}, el, {
+              strokeColor: "#ffd43b",
+              strokeWidth: (el.strokeWidth || 2) + 2,
+              version: (el.version || 1) + 1,
+            });
+          }
+          return el;
+        });
+        _excalAPI.updateScene({ elements: hl });
+      }
+
+      /* Notify chat */
+      if (window._onCanvasSelect) window._onCanvasSelect(info.name, info.desc);
+      setTimeout(function(){ _selBusy = false; }, 60);
+    }
+
+    /* Find name + description for a clicked element */
+    function _findLabelForElement(el, allEls) {
+      /* Clicked a text element → use its text directly */
+      if (el.type === "text" && el.text) {
+        var lines = el.text.trim().split("\n");
+        var name = lines[0].trim();
+        if (name.length < 3) return null;          /* skip tiny labels like "P" */
+        if (name === "Cytoplasm") return null;       /* skip background label */
+        return { name: name, desc: lines.length > 1 ? lines[1].trim() : "" };
+      }
+
+      /* For shapes: search nearby text elements */
+      var ex = el.x || 0, ey = el.y || 0;
+      var ew = el.width || 0, eh = el.height || 0;
+      var ecx = ex + ew / 2, ecy = ey + eh / 2;
+      var margin = Math.max(60, eh * 0.5);
+
+      var nearby = [];
+      for (var i = 0; i < allEls.length; i++) {
+        var t = allEls[i];
+        if (t.type !== "text" || !t.text || t.isDeleted) continue;
+        var tx = t.x || 0, ty = t.y || 0;
+        /* Is this text within the expanded bounding box? */
+        if (tx >= ex - margin && tx <= ex + ew + margin &&
+            ty >= ey - margin && ty <= ey + eh + margin + 60) {
+          var dist = Math.sqrt((tx - ecx) * (tx - ecx) + (ty - ecy) * (ty - ecy));
+          nearby.push({ text: t.text.trim(), dist: dist, fontSize: t.fontSize || 16 });
+        }
+      }
+      if (!nearby.length) return null;
+      nearby.sort(function(a, b) { return a.dist - b.dist; });
+
+      var name = nearby[0].text.split("\n")[0].trim();
+      if (name.length < 3) return null;
+      if (name === "Cytoplasm") {
+        /* Skip background label, try next */
+        if (nearby.length > 1) name = nearby[1].text.split("\n")[0].trim();
+        else return null;
+      }
+
+      var desc = "";
+      for (var j = 1; j < nearby.length; j++) {
+        var d = nearby[j].text.split("\n")[0].trim();
+        if (d !== name && d.length >= 3 && nearby[j].fontSize < nearby[0].fontSize) {
+          desc = d;
+          break;
+        }
+      }
+      return { name: name, desc: desc };
+    }
+
+    /* Given a text element, find the nearest non-text shape */
+    function _findParentShape(textEl, allEls) {
+      if (textEl.containerId) return textEl.containerId;
+      var tx = textEl.x || 0, ty = textEl.y || 0;
+      var best = null, bestDist = 200;
+      for (var i = 0; i < allEls.length; i++) {
+        var s = allEls[i];
+        if (s.type === "text" || s.isDeleted) continue;
+        var cx = (s.x || 0) + (s.width || 0) / 2;
+        var cy = (s.y || 0) + (s.height || 0) / 2;
+        var d = Math.sqrt((tx - cx) * (tx - cx) + (ty - cy) * (ty - cy));
+        if (d < bestDist) { bestDist = d; best = s.id; }
+      }
+      return best;
+    }
 
     window._excalidrawReady = true;
   </script>
@@ -2184,6 +2345,36 @@ function homeSystemNote(msg) {
   const w = $("home-welcome");
   if (w) w.style.display = "none";
 }
+
+/* ── Canvas click-to-select → chat notification ───── */
+let _currentCanvasSelection = null;
+
+window._onCanvasSelect = function(name, desc) {
+  _currentCanvasSelection = { name, desc };
+  const area = $("home-chat-area");
+  if (!area) return;
+
+  /* Remove previous selection note */
+  const prev = area.querySelector(".home-canvas-select");
+  if (prev) prev.remove();
+
+  /* Build message */
+  let msg = name;
+  if (desc) msg += " \u2014 " + desc;  /* em-dash */
+
+  const note = document.createElement("div");
+  note.className = "home-canvas-select";
+  note.innerHTML = '<span class="select-dot">\u25C9</span> You selected: <strong>' +
+    msg.replace(/</g, "&lt;") + '</strong>';
+  area.appendChild(note);
+  note.scrollIntoView({ behavior: "smooth" });
+
+  /* Update input placeholder to hint at follow-up */
+  const input = $("home-input");
+  if (input && !input.value.trim()) {
+    input.placeholder = "Ask about " + name + "\u2026";
+  }
+};
 
 /* ── File upload (Home) ─────────────────────────── */
 async function handleHomeFile(input) {
