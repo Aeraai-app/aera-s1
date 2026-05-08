@@ -169,14 +169,17 @@
       }
 
       if (t === "text") {
+        var txt = cmd.text || cmd.label || "";
+        var fs = cmd.fontSize || 20;
         return {
           type: "text",
           x: (cmd.x != null ? cmd.x : (cmd.from || [0])[0]) || 0,
           y: (cmd.y != null ? cmd.y : (cmd.from || [0,0])[1]) || 0,
-          text: cmd.text || cmd.label || "",
-          fontSize: cmd.fontSize || 20,
+          text: txt,
+          fontSize: fs,
           strokeColor: cmd.color || "#ffffff",
           roughness: 0,
+          autoResize: true,
         };
       }
 
@@ -209,15 +212,60 @@
       try {
         var newEls = ExcalidrawLib.convertToExcalidrawElements(skeletons);
         console.log('[Excalidraw] Converted', newEls.length, 'elements');
+
+        /* Fix text dimensions: convertToExcalidrawElements measures text
+           with fonts that may not have loaded yet, producing clipped boxes.
+           Override with generous computed dimensions and set autoResize
+           so Excalidraw corrects them once the real font is available. */
+        newEls = newEls.map(function(el) {
+          if (el.type === "text" && el.text) {
+            var lines = el.text.split("\n");
+            var maxLen = 0;
+            for (var j = 0; j < lines.length; j++) {
+              if (lines[j].length > maxLen) maxLen = lines[j].length;
+            }
+            var fs = el.fontSize || 20;
+            var needW = Math.ceil(maxLen * fs * 0.65) + 16;
+            var needH = Math.ceil(lines.length * fs * 1.5) + 8;
+            return Object.assign({}, el, {
+              width: Math.max(el.width || 0, needW),
+              height: Math.max(el.height || 0, needH),
+              autoResize: true,
+            });
+          }
+          return el;
+        });
+
         var existing = _excalAPI.getSceneElements() || [];
         _excalAPI.updateScene({ elements: existing.concat(newEls) });
         console.log('[Excalidraw] updateScene done, total elements:', existing.length + newEls.length);
+
         /* Scroll to show drawn content */
         setTimeout(function() {
           if (_excalAPI && _excalAPI.scrollToContent) {
             _excalAPI.scrollToContent(newEls, { fitToViewport: true, viewportZoomFactor: 0.8 });
           }
         }, 100);
+
+        /* Second pass: once fonts load, re-touch text elements to trigger
+           Excalidraw's internal re-measurement with correct font metrics. */
+        document.fonts.ready.then(function() {
+          if (!_excalAPI) return;
+          setTimeout(function() {
+            if (!_excalAPI) return;
+            var cur = _excalAPI.getSceneElements() || [];
+            var refreshed = cur.map(function(el) {
+              if (el.type === "text") {
+                return Object.assign({}, el, {
+                  autoResize: true,
+                  version: (el.version || 1) + 1,
+                });
+              }
+              return el;
+            });
+            _excalAPI.updateScene({ elements: refreshed });
+          }, 300);
+        });
       } catch (err) {
         console.error('[Excalidraw] Draw error:', err);
       }
