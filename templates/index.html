@@ -279,27 +279,54 @@
       if (!elements || !elements.length) return;
       var low = term.toLowerCase();
 
-      /* Find shape IDs to highlight: check text elements for matching text,
-         then highlight their parent container (the shape).
-         Also match stand-alone text elements. */
-      var targetIds = {};
+      /* 1. Find all text elements whose text contains the term */
+      var matchedTexts = [];
       for (var i = 0; i < elements.length; i++) {
         var el = elements[i];
-        if (el.type === "text" && el.text && el.text.toLowerCase().indexOf(low) !== -1) {
-          if (el.containerId) {
-            targetIds[el.containerId] = true;
-          } else {
-            targetIds[el.id] = true;
-          }
+        if (el.type === "text" && el.text &&
+            el.text.toLowerCase().indexOf(low) !== -1) {
+          matchedTexts.push(el);
         }
       }
-      if (!Object.keys(targetIds).length) {
-        console.log('[Highlight] No match for "' + term + '"');
+      if (!matchedTexts.length) {
+        console.log('[Highlight] No text match for "' + term + '"');
         return;
       }
-      console.log('[Highlight] "' + term + '" → ' + Object.keys(targetIds).length + ' elements');
 
-      /* Save originals */
+      /* 2. Resolve each matched text → the shape that should glow.
+            - Embedded label (has containerId) → highlight the container
+            - Standalone text → find the nearest non-trivial shape */
+      var targetIds = {};
+      for (var i = 0; i < matchedTexts.length; i++) {
+        var txt = matchedTexts[i];
+        if (txt.containerId) {
+          targetIds[txt.containerId] = true;
+          continue;
+        }
+        /* Standalone text: find nearest shape (skip tiny dots, lines, text) */
+        var tx = txt.x || 0, ty = txt.y || 0;
+        var bestId = null, bestDist = 200;
+        for (var j = 0; j < elements.length; j++) {
+          var s = elements[j];
+          if (s.type === "text" || s.type === "line" || s.isDeleted) continue;
+          if ((s.width || 0) < 20 && (s.height || 0) < 20) continue;
+          var cx = (s.x || 0) + (s.width || 0) / 2;
+          var cy = (s.y || 0) + (s.height || 0) / 2;
+          var d = Math.sqrt((tx - cx) * (tx - cx) + (ty - cy) * (ty - cy));
+          if (d < bestDist) { bestDist = d; bestId = s.id; }
+        }
+        if (bestId) {
+          targetIds[bestId] = true;
+        } else {
+          targetIds[txt.id] = true;   /* fallback: color the text itself */
+        }
+      }
+
+      var ids = Object.keys(targetIds);
+      if (!ids.length) return;
+      console.log('[Highlight] "' + term + '" → ' + ids.length + ' shapes');
+
+      /* 3. Save originals, apply yellow glow */
       var originals = {};
       for (var i = 0; i < elements.length; i++) {
         if (targetIds[elements[i].id]) {
@@ -309,8 +336,6 @@
           };
         }
       }
-
-      /* Apply highlight: bright yellow, thicker stroke */
       var highlighted = elements.map(function(el) {
         if (targetIds[el.id]) {
           return Object.assign({}, el, {
@@ -323,7 +348,7 @@
       });
       _excalAPI.updateScene({ elements: highlighted });
 
-      /* Revert after 2.5s */
+      /* 4. Revert after 2.5s */
       setTimeout(function() {
         if (!_excalAPI) return;
         var current = _excalAPI.getSceneElements();
