@@ -1987,6 +1987,61 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
   border-bottom-color: #d9480f;
 }
 
+/* ── Layer toggle controls ────────────────────────── */
+.layer-controls {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 6px 14px;
+  z-index: 10;
+  position: relative;
+  flex-shrink: 0;
+}
+.layer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  color: #ccc;
+  font-size: 0.75rem;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  user-select: none;
+}
+.layer-btn:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: #666;
+  color: #fff;
+}
+.layer-btn .layer-eye {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+.layer-btn.layer-off {
+  opacity: 0.45;
+  border-style: dashed;
+  text-decoration: line-through;
+}
+.layer-btn.layer-off .layer-eye {
+  opacity: 0.3;
+}
+[data-theme="light"] .layer-btn {
+  border-color: #ccc;
+  background: rgba(0,0,0,0.04);
+  color: #555;
+}
+[data-theme="light"] .layer-btn:hover {
+  background: rgba(0,0,0,0.08);
+  border-color: #999;
+  color: #333;
+}
+[data-theme="light"] .layer-btn.layer-off {
+  opacity: 0.4;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .teach-panel { width: 90vw !important; }

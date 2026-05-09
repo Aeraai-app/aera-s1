@@ -32,6 +32,12 @@
     let _excalRoot = null;
     let _excalAPI  = null;
 
+    /* ── Layer system state ── */
+    var _aiElementIds = {};        /* IDs of AI-drawn elements */
+    var _layerShowAI = true;       /* AI layer visible? */
+    var _layerShowUser = true;     /* User layer visible? */
+    var _hiddenElements = {};      /* id → full element backup while hidden */
+
     /* ── Selection tracking state ── */
     var _lastSelKey = "";
     var _selHlId = null;
@@ -236,16 +242,31 @@
           return el;
         });
 
+        /* Tag all new elements as AI-drawn */
+        for (var k = 0; k < newEls.length; k++) {
+          if (newEls[k].id) _aiElementIds[newEls[k].id] = true;
+        }
+
+        /* If AI layer is hidden, mark new AI elements as deleted immediately */
+        if (!_layerShowAI) {
+          newEls = newEls.map(function(el) {
+            _hiddenElements[el.id] = { isDeleted: false, opacity: el.opacity };
+            return Object.assign({}, el, { isDeleted: true });
+          });
+        }
+
         var existing = _excalAPI.getSceneElements() || [];
         _excalAPI.updateScene({ elements: existing.concat(newEls) });
         console.log('[Excalidraw] updateScene done, total elements:', existing.length + newEls.length);
 
-        /* Scroll to show drawn content */
-        setTimeout(function() {
-          if (_excalAPI && _excalAPI.scrollToContent) {
-            _excalAPI.scrollToContent(newEls, { fitToViewport: true, viewportZoomFactor: 0.8 });
-          }
-        }, 100);
+        /* Scroll to show drawn content (only if AI layer visible) */
+        if (_layerShowAI) {
+          setTimeout(function() {
+            if (_excalAPI && _excalAPI.scrollToContent) {
+              _excalAPI.scrollToContent(newEls, { fitToViewport: true, viewportZoomFactor: 0.8 });
+            }
+          }, 100);
+        }
 
         /* Second pass: once fonts load, re-touch text elements to trigger
            Excalidraw's internal re-measurement with correct font metrics. */
@@ -514,6 +535,76 @@
       }
       return best;
     }
+
+    /* ── Layer toggle system ── */
+    window._setLayerVisibility = function(layer, visible) {
+      if (layer === "ai") _layerShowAI = visible;
+      else if (layer === "user") _layerShowUser = visible;
+
+      if (!_excalAPI) return;
+      var elements = _excalAPI.getSceneElements() || [];
+
+      var updated = elements.map(function(el) {
+        var isAI = !!_aiElementIds[el.id];
+        var layerVisible = isAI ? _layerShowAI : _layerShowUser;
+
+        if (!layerVisible && !el.isDeleted) {
+          /* Hide: back up and mark deleted */
+          _hiddenElements[el.id] = {
+            isDeleted: false,
+            opacity: el.opacity,
+          };
+          return Object.assign({}, el, {
+            isDeleted: true,
+            version: (el.version || 1) + 1,
+          });
+        } else if (layerVisible && _hiddenElements[el.id]) {
+          /* Show: restore from backup */
+          var backup = _hiddenElements[el.id];
+          delete _hiddenElements[el.id];
+          return Object.assign({}, el, {
+            isDeleted: false,
+            opacity: backup.opacity != null ? backup.opacity : el.opacity,
+            version: (el.version || 1) + 1,
+          });
+        }
+        return el;
+      });
+
+      _excalAPI.updateScene({ elements: updated });
+      _updateLayerButtons();
+      console.log('[Layers] ' + layer + ' → ' + (visible ? 'shown' : 'hidden'));
+    };
+
+    window._toggleLayer = function(layer) {
+      if (layer === "ai") window._setLayerVisibility("ai", !_layerShowAI);
+      else if (layer === "user") window._setLayerVisibility("user", !_layerShowUser);
+    };
+
+    function _updateLayerButtons() {
+      var aiBtn = document.getElementById("layer-ai-btn");
+      var userBtn = document.getElementById("layer-user-btn");
+      if (aiBtn) {
+        aiBtn.classList.toggle("layer-off", !_layerShowAI);
+        aiBtn.title = _layerShowAI ? "Hide AI diagram" : "Show AI diagram";
+      }
+      if (userBtn) {
+        userBtn.classList.toggle("layer-off", !_layerShowUser);
+        userBtn.title = _layerShowUser ? "Hide my annotations" : "Show my annotations";
+      }
+    }
+    window._updateLayerButtons = _updateLayerButtons;
+
+    /* Reset layer state when Excalidraw is unmounted */
+    var _origUnmount = window._unmountExcalidraw;
+    window._unmountExcalidraw = function() {
+      _aiElementIds = {};
+      _hiddenElements = {};
+      _layerShowAI = true;
+      _layerShowUser = true;
+      _updateLayerButtons();
+      if (_origUnmount) _origUnmount();
+    };
 
     window._excalidrawReady = true;
   </script>
@@ -817,6 +908,16 @@
   <button class="teach-close" id="teach-close" title="Close panel">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
   </button>
+  <div class="layer-controls" id="layer-controls">
+    <button class="layer-btn" id="layer-ai-btn" onclick="window._toggleLayer('ai')" title="Hide AI diagram">
+      <svg class="layer-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>AI Diagram</span>
+    </button>
+    <button class="layer-btn" id="layer-user-btn" onclick="window._toggleLayer('user')" title="Hide my annotations">
+      <svg class="layer-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>My Notes</span>
+    </button>
+  </div>
   <div class="teach-panel-body" id="teach-panel-body">
     <div id="teaching-content"></div>
   </div>
