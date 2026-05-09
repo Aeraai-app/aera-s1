@@ -602,7 +602,7 @@
     }
     window._updateLayerButtons = _updateLayerButtons;
 
-    /* Reset layer state when Excalidraw is unmounted */
+    /* Reset layer + measurement state when Excalidraw is unmounted */
     var _origUnmount = window._unmountExcalidraw;
     window._unmountExcalidraw = function() {
       _aiElementIds = {};
@@ -610,8 +610,366 @@
       _layerShowAI = true;
       _layerShowUser = true;
       _updateLayerButtons();
+      _measureMode = null;
+      _measureClicks = [];
+      _measurements = [];
+      window._pendingDotIds = [];
+      _updateMeasureUI();
+      _updateMeasurementList();
       if (_origUnmount) _origUnmount();
     };
+
+    /* ── Measurement tools ── */
+    var _measureMode = null;       /* null | "distance" | "angle" */
+    var _measureClicks = [];       /* pending click points [{x,y}] */
+    var _measurements = [];        /* {id, type, points, elIds, label} */
+    var _measureIdCounter = 0;
+
+    function _genMeasureId() { return "measure_" + (++_measureIdCounter); }
+
+    /* Convert a mouse event on the overlay to Excalidraw scene coords */
+    function _screenToScene(e) {
+      if (!_excalAPI) return null;
+      var state = _excalAPI.getAppState();
+      if (!state) return null;
+      var zoom = state.zoom ? state.zoom.value : 1;
+      var scrollX = state.scrollX || 0;
+      var scrollY = state.scrollY || 0;
+      var rect = e.currentTarget.getBoundingClientRect();
+      var sx = e.clientX - rect.left;
+      var sy = e.clientY - rect.top;
+      return {
+        x: (sx / zoom) - scrollX,
+        y: (sy / zoom) - scrollY,
+      };
+    }
+
+    /* Handle click on measurement overlay */
+    window._measureClick = function(e) {
+      if (!_measureMode || !_excalAPI) return;
+      var pt = _screenToScene(e);
+      if (!pt) return;
+      _measureClicks.push(pt);
+
+      /* Draw a small dot at each click point */
+      _drawMeasureDot(pt);
+
+      if (_measureMode === "distance" && _measureClicks.length === 2) {
+        _createDistanceMeasurement(_measureClicks[0], _measureClicks[1]);
+        _measureClicks = [];
+      } else if (_measureMode === "angle" && _measureClicks.length === 3) {
+        _createAngleMeasurement(_measureClicks[0], _measureClicks[1], _measureClicks[2]);
+        _measureClicks = [];
+      }
+      _updateMeasureUI();
+    };
+
+    function _drawMeasureDot(pt) {
+      if (!_excalAPI) return;
+      var dot = ExcalidrawLib.convertToExcalidrawElements([{
+        type: "ellipse",
+        x: pt.x - 4, y: pt.y - 4,
+        width: 8, height: 8,
+        backgroundColor: "#ff6b6b",
+        fillStyle: "solid",
+        strokeColor: "#ff6b6b",
+        strokeWidth: 1,
+        roughness: 0,
+      }]);
+      if (dot.length) {
+        /* Track dot IDs so we can remove them after measurement completes */
+        dot[0] = Object.assign({}, dot[0]);
+        window._pendingDotIds = window._pendingDotIds || [];
+        window._pendingDotIds.push(dot[0].id);
+        var existing = _excalAPI.getSceneElements() || [];
+        _excalAPI.updateScene({ elements: existing.concat(dot) });
+      }
+    }
+
+    function _removePendingDots() {
+      if (!_excalAPI || !window._pendingDotIds || !window._pendingDotIds.length) return;
+      var dotSet = {};
+      for (var i = 0; i < window._pendingDotIds.length; i++) dotSet[window._pendingDotIds[i]] = true;
+      var els = _excalAPI.getSceneElements() || [];
+      var filtered = els.map(function(el) {
+        if (dotSet[el.id]) return Object.assign({}, el, { isDeleted: true, version: (el.version||1)+1 });
+        return el;
+      });
+      _excalAPI.updateScene({ elements: filtered });
+      window._pendingDotIds = [];
+    }
+
+    function _createDistanceMeasurement(p1, p2) {
+      _removePendingDots();
+      var dx = p2.x - p1.x, dy = p2.y - p1.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var midX = (p1.x + p2.x) / 2;
+      var midY = (p1.y + p2.y) / 2;
+      var label = Math.round(dist) + " px";
+      var mId = _genMeasureId();
+
+      var skeletons = [
+        /* Dashed line between the two points */
+        {
+          type: "line",
+          x: p1.x, y: p1.y,
+          points: [[0, 0], [dx, dy]],
+          strokeColor: "#ff6b6b",
+          strokeWidth: 2,
+          strokeStyle: "dashed",
+          roughness: 0,
+        },
+        /* Small endpoint circles */
+        {
+          type: "ellipse",
+          x: p1.x - 4, y: p1.y - 4,
+          width: 8, height: 8,
+          backgroundColor: "#ff6b6b",
+          fillStyle: "solid",
+          strokeColor: "#ff6b6b",
+          strokeWidth: 1,
+          roughness: 0,
+        },
+        {
+          type: "ellipse",
+          x: p2.x - 4, y: p2.y - 4,
+          width: 8, height: 8,
+          backgroundColor: "#ff6b6b",
+          fillStyle: "solid",
+          strokeColor: "#ff6b6b",
+          strokeWidth: 1,
+          roughness: 0,
+        },
+        /* Label at midpoint */
+        {
+          type: "text",
+          x: midX - 30, y: midY - 22,
+          text: label,
+          fontSize: 14,
+          strokeColor: "#ff6b6b",
+          roughness: 0,
+          autoResize: true,
+        },
+      ];
+
+      var newEls = ExcalidrawLib.convertToExcalidrawElements(skeletons);
+      var elIds = [];
+      for (var i = 0; i < newEls.length; i++) elIds.push(newEls[i].id);
+      /* Tag as AI so layer toggle treats them as "AI" (measurement) layer */
+
+      var existing = _excalAPI.getSceneElements() || [];
+      _excalAPI.updateScene({ elements: existing.concat(newEls) });
+
+      _measurements.push({ id: mId, type: "distance", points: [p1, p2], elIds: elIds, label: label });
+      _updateMeasurementList();
+    }
+
+    function _createAngleMeasurement(pA, pVertex, pC) {
+      _removePendingDots();
+      /* Angle at vertex between arms VA and VC */
+      var ax = pA.x - pVertex.x, ay = pA.y - pVertex.y;
+      var cx = pC.x - pVertex.x, cy = pC.y - pVertex.y;
+      var angleA = Math.atan2(ay, ax);
+      var angleC = Math.atan2(cy, cx);
+      var diff = angleC - angleA;
+      /* Normalize to [0, 2π) */
+      while (diff < 0) diff += 2 * Math.PI;
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      var degrees = Math.round(diff * 180 / Math.PI);
+      var label = degrees + "\u00B0";
+      var mId = _genMeasureId();
+
+      /* Draw the two arms as dashed lines */
+      var skeletons = [
+        {
+          type: "line",
+          x: pVertex.x, y: pVertex.y,
+          points: [[0, 0], [ax, ay]],
+          strokeColor: "#ff6b6b",
+          strokeWidth: 2,
+          strokeStyle: "dashed",
+          roughness: 0,
+        },
+        {
+          type: "line",
+          x: pVertex.x, y: pVertex.y,
+          points: [[0, 0], [cx, cy]],
+          strokeColor: "#ff6b6b",
+          strokeWidth: 2,
+          strokeStyle: "dashed",
+          roughness: 0,
+        },
+      ];
+
+      /* Draw arc as short line segments */
+      var arcR = Math.min(40, Math.min(Math.sqrt(ax*ax+ay*ay), Math.sqrt(cx*cx+cy*cy)) * 0.4);
+      var startAngle = angleA;
+      var endAngle = angleC;
+      /* Make sure we sweep the smaller angle */
+      var sweep = endAngle - startAngle;
+      while (sweep < 0) sweep += 2 * Math.PI;
+      if (sweep > Math.PI) { startAngle = angleC; sweep = 2 * Math.PI - sweep; }
+      var arcSegs = 16;
+      var arcPts = [[0,0]];
+      for (var i = 0; i <= arcSegs; i++) {
+        var t = startAngle + (sweep * i / arcSegs);
+        arcPts.push([Math.cos(t) * arcR, Math.sin(t) * arcR]);
+      }
+      /* Remove the [0,0] start — we want a pure arc, not lines from center */
+      var arcLine = [];
+      for (var i = 1; i < arcPts.length; i++) {
+        arcLine.push([arcPts[i][0] - arcPts[1][0], arcPts[i][1] - arcPts[1][1]]);
+      }
+      skeletons.push({
+        type: "line",
+        x: pVertex.x + arcPts[1][0],
+        y: pVertex.y + arcPts[1][1],
+        points: arcLine,
+        strokeColor: "#ff6b6b",
+        strokeWidth: 2,
+        roughness: 0,
+      });
+
+      /* Endpoint dots */
+      skeletons.push(
+        { type: "ellipse", x: pA.x - 4, y: pA.y - 4, width: 8, height: 8,
+          backgroundColor: "#ff6b6b", fillStyle: "solid", strokeColor: "#ff6b6b", strokeWidth: 1, roughness: 0 },
+        { type: "ellipse", x: pVertex.x - 4, y: pVertex.y - 4, width: 8, height: 8,
+          backgroundColor: "#ff6b6b", fillStyle: "solid", strokeColor: "#ff6b6b", strokeWidth: 1, roughness: 0 },
+        { type: "ellipse", x: pC.x - 4, y: pC.y - 4, width: 8, height: 8,
+          backgroundColor: "#ff6b6b", fillStyle: "solid", strokeColor: "#ff6b6b", strokeWidth: 1, roughness: 0 }
+      );
+
+      /* Label near vertex */
+      var midAngle = startAngle + sweep / 2;
+      var labelR = arcR + 18;
+      skeletons.push({
+        type: "text",
+        x: pVertex.x + Math.cos(midAngle) * labelR - 16,
+        y: pVertex.y + Math.sin(midAngle) * labelR - 10,
+        text: label,
+        fontSize: 14,
+        strokeColor: "#ff6b6b",
+        roughness: 0,
+        autoResize: true,
+      });
+
+      var newEls = ExcalidrawLib.convertToExcalidrawElements(skeletons);
+      var elIds = [];
+      for (var i = 0; i < newEls.length; i++) elIds.push(newEls[i].id);
+
+      var existing = _excalAPI.getSceneElements() || [];
+      _excalAPI.updateScene({ elements: existing.concat(newEls) });
+
+      _measurements.push({ id: mId, type: "angle", points: [pA, pVertex, pC], elIds: elIds, label: label });
+      _updateMeasurementList();
+    }
+
+    /* Delete a measurement by removing its elements from the scene */
+    window._deleteMeasurement = function(mId) {
+      if (!_excalAPI) return;
+      var m = null;
+      for (var i = 0; i < _measurements.length; i++) {
+        if (_measurements[i].id === mId) { m = _measurements[i]; _measurements.splice(i, 1); break; }
+      }
+      if (!m) return;
+      var idSet = {};
+      for (var i = 0; i < m.elIds.length; i++) idSet[m.elIds[i]] = true;
+      var els = _excalAPI.getSceneElements() || [];
+      var updated = els.map(function(el) {
+        if (idSet[el.id]) return Object.assign({}, el, { isDeleted: true, version: (el.version||1)+1 });
+        return el;
+      });
+      _excalAPI.updateScene({ elements: updated });
+      _updateMeasurementList();
+    };
+
+    /* Clear all measurements */
+    window._clearAllMeasurements = function() {
+      if (!_excalAPI) return;
+      var allIds = {};
+      for (var i = 0; i < _measurements.length; i++) {
+        for (var j = 0; j < _measurements[i].elIds.length; j++) {
+          allIds[_measurements[i].elIds[j]] = true;
+        }
+      }
+      var els = _excalAPI.getSceneElements() || [];
+      var updated = els.map(function(el) {
+        if (allIds[el.id]) return Object.assign({}, el, { isDeleted: true, version: (el.version||1)+1 });
+        return el;
+      });
+      _excalAPI.updateScene({ elements: updated });
+      _measurements = [];
+      _updateMeasurementList();
+    };
+
+    function _updateMeasurementList() {
+      var list = document.getElementById("measure-list");
+      if (!list) return;
+      if (!_measurements.length) {
+        list.innerHTML = "";
+        list.style.display = "none";
+        return;
+      }
+      list.style.display = "block";
+      var html = "";
+      for (var i = 0; i < _measurements.length; i++) {
+        var m = _measurements[i];
+        var icon = m.type === "distance" ? "\u2194" : "\u2220";
+        html += '<div class="measure-item">'
+          + '<span class="measure-icon">' + icon + '</span>'
+          + '<span class="measure-label">' + m.label + '</span>'
+          + '<button class="measure-del" onclick="window._deleteMeasurement(\'' + m.id + '\')" title="Delete">'
+          + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+          + '</button></div>';
+      }
+      list.innerHTML = html;
+    }
+    window._updateMeasurementList = _updateMeasurementList;
+
+    /* Activate / deactivate measurement mode */
+    window._setMeasureMode = function(mode) {
+      if (_measureMode === mode) {
+        /* Toggle off */
+        _measureMode = null;
+        _measureClicks = [];
+        _removePendingDots();
+      } else {
+        _measureMode = mode;
+        _measureClicks = [];
+        _removePendingDots();
+      }
+      _updateMeasureUI();
+    };
+
+    function _updateMeasureUI() {
+      var overlay = document.getElementById("measure-overlay");
+      var distBtn = document.getElementById("measure-dist-btn");
+      var angleBtn = document.getElementById("measure-angle-btn");
+      var hint = document.getElementById("measure-hint");
+
+      if (overlay) overlay.style.display = _measureMode ? "block" : "none";
+      if (distBtn) distBtn.classList.toggle("measure-active", _measureMode === "distance");
+      if (angleBtn) angleBtn.classList.toggle("measure-active", _measureMode === "angle");
+
+      if (hint) {
+        if (!_measureMode) {
+          hint.style.display = "none";
+        } else {
+          hint.style.display = "block";
+          if (_measureMode === "distance") {
+            var need = 2 - _measureClicks.length;
+            hint.textContent = need === 2 ? "Click first point" : "Click second point";
+          } else {
+            var need = 3 - _measureClicks.length;
+            if (need === 3) hint.textContent = "Click first arm point";
+            else if (need === 2) hint.textContent = "Click vertex (center)";
+            else hint.textContent = "Click second arm point";
+          }
+        }
+      }
+    }
+    window._updateMeasureUI = _updateMeasureUI;
 
     /* ── Zoom / pan controls ── */
     var ZOOM_MIN = 0.25;
@@ -976,9 +1334,21 @@
       <svg class="layer-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
       <span>My Notes</span>
     </button>
+    <span class="layer-sep"></span>
+    <button class="layer-btn measure-tool-btn" id="measure-dist-btn" onclick="window._setMeasureMode('distance')" title="Measure distance">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="20" x2="20" y2="4"/><line x1="4" y1="20" x2="4" y2="15"/><line x1="4" y1="20" x2="9" y2="20"/><line x1="20" y1="4" x2="20" y2="9"/><line x1="20" y1="4" x2="15" y2="4"/></svg>
+      <span>Distance</span>
+    </button>
+    <button class="layer-btn measure-tool-btn" id="measure-angle-btn" onclick="window._setMeasureMode('angle')" title="Measure angle">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,20 4,8"/><polyline points="4,20 20,20"/><path d="M4,14 Q8,14 10,18" fill="none"/></svg>
+      <span>Angle</span>
+    </button>
   </div>
   <div class="teach-panel-body" id="teach-panel-body">
     <div id="teaching-content"></div>
+    <div class="measure-overlay" id="measure-overlay" onclick="window._measureClick(event)" style="display:none"></div>
+    <div class="measure-hint" id="measure-hint" style="display:none">Click first point</div>
+    <div class="measure-list" id="measure-list" style="display:none"></div>
     <div class="zoom-controls" id="zoom-controls">
       <button class="zoom-btn" id="zoom-in-btn" onclick="window._zoomCanvas(1)" title="Zoom in">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
