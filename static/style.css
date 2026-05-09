@@ -2042,6 +2042,91 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
   opacity: 0.4;
 }
 
+/* ── Zoom / pan controls ─────────────────────────── */
+.zoom-controls {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(30, 30, 30, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 3px;
+  z-index: 12;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.zoom-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+.zoom-btn:active {
+  background: rgba(255,255,255,0.18);
+}
+.zoom-level {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #999;
+  font-size: 0.72rem;
+  font-family: 'Inter', monospace;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  padding: 0 4px;
+}
+.zoom-level:hover {
+  background: rgba(255,255,255,0.08);
+  color: #ccc;
+}
+.zoom-fit-btn {
+  margin-left: 2px;
+  border-left: 1px solid #444;
+  border-radius: 0 6px 6px 0;
+  padding-left: 4px;
+}
+[data-theme="light"] .zoom-controls {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: #ccc;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+[data-theme="light"] .zoom-btn {
+  color: #666;
+}
+[data-theme="light"] .zoom-btn:hover {
+  background: rgba(0,0,0,0.07);
+  color: #333;
+}
+[data-theme="light"] .zoom-level {
+  color: #777;
+}
+[data-theme="light"] .zoom-level:hover {
+  background: rgba(0,0,0,0.05);
+  color: #444;
+}
+[data-theme="light"] .zoom-fit-btn {
+  border-left-color: #ccc;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .teach-panel { width: 90vw !important; }

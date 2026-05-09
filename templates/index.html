@@ -390,6 +390,13 @@
 
     /* ── Click-to-select: detect selection changes on canvas ── */
     function _handleSelectionChange(elements, appState) {
+      /* Update zoom indicator on every change (zoom, pan, draw, etc.) */
+      var _zoomBtn = document.getElementById("zoom-level-btn");
+      if (_zoomBtn && appState && appState.zoom) {
+        var _pct = Math.round(appState.zoom.value * 100);
+        if (_zoomBtn.textContent !== _pct + "%") _zoomBtn.textContent = _pct + "%";
+      }
+
       if (_selBusy || !_excalAPI) return;
 
       /* Only act when the pointer/selection tool is active */
@@ -605,6 +612,58 @@
       _updateLayerButtons();
       if (_origUnmount) _origUnmount();
     };
+
+    /* ── Zoom / pan controls ── */
+    var ZOOM_MIN = 0.25;
+    var ZOOM_MAX = 4.0;
+    var ZOOM_STEP = 0.15;  /* ~15% per click */
+
+    function _clampZoom(z) {
+      return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+    }
+
+    function _updateZoomIndicator() {
+      var btn = document.getElementById("zoom-level-btn");
+      if (!btn || !_excalAPI) return;
+      var state = _excalAPI.getAppState();
+      var pct = Math.round((state && state.zoom ? state.zoom.value : 1) * 100);
+      btn.textContent = pct + "%";
+    }
+
+    window._zoomCanvas = function(direction) {
+      if (!_excalAPI) return;
+      var state = _excalAPI.getAppState();
+      var cur = state && state.zoom ? state.zoom.value : 1;
+      var next = _clampZoom(cur + direction * ZOOM_STEP);
+      _excalAPI.updateScene({
+        appState: { zoom: { value: next } },
+      });
+      _updateZoomIndicator();
+    };
+
+    window._zoomReset = function() {
+      if (!_excalAPI) return;
+      _excalAPI.updateScene({
+        appState: { zoom: { value: 1 } },
+      });
+      /* Also center on content */
+      var els = _excalAPI.getSceneElements();
+      if (els && els.length) {
+        _excalAPI.scrollToContent(els, { fitToViewport: false });
+      }
+      _updateZoomIndicator();
+    };
+
+    window._zoomFit = function() {
+      if (!_excalAPI) return;
+      var els = _excalAPI.getSceneElements();
+      if (els && els.length) {
+        _excalAPI.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.85 });
+      }
+      setTimeout(_updateZoomIndicator, 50);
+    };
+
+    window._updateZoomIndicator = _updateZoomIndicator;
 
     window._excalidrawReady = true;
   </script>
@@ -920,6 +979,18 @@
   </div>
   <div class="teach-panel-body" id="teach-panel-body">
     <div id="teaching-content"></div>
+    <div class="zoom-controls" id="zoom-controls">
+      <button class="zoom-btn" id="zoom-in-btn" onclick="window._zoomCanvas(1)" title="Zoom in">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="zoom-level" id="zoom-level-btn" onclick="window._zoomReset()" title="Reset view">100%</button>
+      <button class="zoom-btn" id="zoom-out-btn" onclick="window._zoomCanvas(-1)" title="Zoom out">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="zoom-btn zoom-fit-btn" id="zoom-fit-btn" onclick="window._zoomFit()" title="Fit to content">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
