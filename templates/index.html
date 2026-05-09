@@ -551,34 +551,58 @@
       if (!_excalAPI) return;
       var elements = _excalAPI.getSceneElements() || [];
 
-      var updated = elements.map(function(el) {
-        var isAI = !!_aiElementIds[el.id];
-        var layerVisible = isAI ? _layerShowAI : _layerShowUser;
+      if (!visible) {
+        /* ── HIDE: back up full element copies, then mark deleted ── */
+        var updated = elements.map(function(el) {
+          var isAI = !!_aiElementIds[el.id];
+          var belongsToLayer = (layer === "ai" && isAI) || (layer === "user" && !isAI);
+          if (belongsToLayer && !el.isDeleted) {
+            _hiddenElements[el.id] = JSON.parse(JSON.stringify(el));
+            return Object.assign({}, el, {
+              isDeleted: true,
+              version: (el.version || 1) + 1,
+            });
+          }
+          return el;
+        });
+        _excalAPI.updateScene({ elements: updated });
+      } else {
+        /* ── SHOW: re-inject backed-up elements into the scene ── */
+        var sceneById = {};
+        for (var i = 0; i < elements.length; i++) sceneById[elements[i].id] = true;
 
-        if (!layerVisible && !el.isDeleted) {
-          /* Hide: back up and mark deleted */
-          _hiddenElements[el.id] = {
-            isDeleted: false,
-            opacity: el.opacity,
-          };
-          return Object.assign({}, el, {
-            isDeleted: true,
-            version: (el.version || 1) + 1,
-          });
-        } else if (layerVisible && _hiddenElements[el.id]) {
-          /* Show: restore from backup */
-          var backup = _hiddenElements[el.id];
-          delete _hiddenElements[el.id];
-          return Object.assign({}, el, {
-            isDeleted: false,
-            opacity: backup.opacity != null ? backup.opacity : el.opacity,
-            version: (el.version || 1) + 1,
-          });
+        /* Restore any elements still in scene (marked deleted) */
+        var updated = elements.map(function(el) {
+          if (_hiddenElements[el.id]) {
+            var backup = _hiddenElements[el.id];
+            delete _hiddenElements[el.id];
+            return Object.assign({}, backup, {
+              isDeleted: false,
+              version: (el.version || 1) + 1,
+            });
+          }
+          return el;
+        });
+
+        /* Re-add backed-up elements that Excalidraw garbage-collected */
+        var remaining = Object.keys(_hiddenElements);
+        for (var i = 0; i < remaining.length; i++) {
+          var id = remaining[i];
+          var isAI = !!_aiElementIds[id];
+          var belongsToLayer = (layer === "ai" && isAI) || (layer === "user" && !isAI);
+          if (belongsToLayer && !sceneById[id]) {
+            var backup = _hiddenElements[id];
+            delete _hiddenElements[id];
+            updated.push(Object.assign({}, backup, {
+              isDeleted: false,
+              version: (backup.version || 1) + 1,
+            }));
+          }
         }
-        return el;
-      });
 
-      _excalAPI.updateScene({ elements: updated });
+        _excalAPI.updateScene({ elements: updated });
+      }
+
       _updateLayerButtons();
       console.log('[Layers] ' + layer + ' → ' + (visible ? 'shown' : 'hidden'));
     };
