@@ -1047,6 +1047,77 @@
 
     window._updateZoomIndicator = _updateZoomIndicator;
 
+    /* ── Timeline helpers (called by the regular-script timeline controller) ── */
+
+    /* Draw one step's commands onto the canvas; returns {ids, backups}. */
+    window._drawStepForTimeline = function(cmds) {
+      if (!_excalAPI) return { ids: [], backups: [] };
+      var skeletons = [];
+      for (var i = 0; i < cmds.length; i++) {
+        var sk = _cmdToSkeleton(cmds[i]);
+        if (sk) skeletons.push(sk);
+      }
+      if (!skeletons.length) return { ids: [], backups: [] };
+      try {
+        var newEls = ExcalidrawLib.convertToExcalidrawElements(skeletons);
+        newEls = newEls.map(function(el) {
+          if (el.type === "text" && el.text) {
+            var lines = el.text.split("\n");
+            var maxLen = 0;
+            for (var j = 0; j < lines.length; j++) if (lines[j].length > maxLen) maxLen = lines[j].length;
+            var fs = el.fontSize || 20;
+            return Object.assign({}, el, {
+              width: Math.max(el.width || 0, Math.ceil(maxLen * fs * 0.65) + 16),
+              height: Math.max(el.height || 0, Math.ceil(lines.length * fs * 1.5) + 8),
+              autoResize: true,
+            });
+          }
+          return el;
+        });
+        for (var k = 0; k < newEls.length; k++) {
+          if (newEls[k].id) _aiElementIds[newEls[k].id] = true;
+        }
+        var existing = _excalAPI.getSceneElements() || [];
+        _excalAPI.updateScene({ elements: existing.concat(newEls) });
+        return {
+          ids: newEls.map(function(el) { return el.id; }),
+          backups: newEls.map(function(el) { return Object.assign({}, el); }),
+        };
+      } catch (err) {
+        console.error('[Timeline] Draw step error:', err);
+        return { ids: [], backups: [] };
+      }
+    };
+
+    /* Show or hide specific elements; re-injects garbage-collected ones from backup. */
+    window._updateSceneForTimeline = function(updates) {
+      if (!_excalAPI) return;
+      var updateMap = {};
+      for (var i = 0; i < updates.length; i++) updateMap[updates[i].id] = updates[i];
+      var els = _excalAPI.getSceneElements() || [];
+      var seen = {};
+      var updated = els.map(function(el) {
+        if (updateMap[el.id] !== undefined) {
+          seen[el.id] = true;
+          return Object.assign({}, el, {
+            isDeleted: updateMap[el.id].isDeleted,
+            version: (el.version || 1) + 1,
+          });
+        }
+        return el;
+      });
+      for (var j = 0; j < updates.length; j++) {
+        var u = updates[j];
+        if (!seen[u.id] && u.backup) {
+          updated.push(Object.assign({}, u.backup, {
+            isDeleted: u.isDeleted,
+            version: (u.backup.version || 1) + 1,
+          }));
+        }
+      }
+      _excalAPI.updateScene({ elements: updated });
+    };
+
     window._excalidrawReady = true;
   </script>
   {% if clerk_key and clerk_domain %}<script async crossorigin="anonymous" data-clerk-publishable-key="{{ clerk_key }}" src="https://{{ clerk_domain }}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" type="text/javascript"></script>{% endif %}
@@ -1384,6 +1455,31 @@
       <button class="zoom-btn zoom-fit-btn" id="zoom-fit-btn" onclick="window._zoomFit()" title="Fit to content">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
       </button>
+    </div>
+
+    <!-- Timeline scrubber (shows only for step-by-step diagrams) -->
+    <div class="timeline-bar" id="timeline-bar" style="display:none">
+      <div class="tl-top">
+        <span class="tl-step-desc" id="tl-step-desc"></span>
+        <span class="tl-step-counter" id="tl-step-counter"></span>
+      </div>
+      <input type="range" class="tl-scrubber" id="tl-scrubber" min="0" max="5" step="1" value="0" />
+      <div class="tl-bottom">
+        <button class="tl-btn" id="tl-prev" title="Previous step">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="19,5 9,12 19,19"/><rect x="5" y="5" width="3" height="14"/></svg>
+        </button>
+        <button class="tl-btn tl-play-btn" id="tl-play" title="Play">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        </button>
+        <button class="tl-btn" id="tl-next" title="Next step">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,5 15,12 5,19"/><rect x="16" y="5" width="3" height="14"/></svg>
+        </button>
+        <div class="tl-speed-wrap">
+          <button class="tl-speed-btn" data-speed="0.5">0.5×</button>
+          <button class="tl-speed-btn tl-speed-active" data-speed="1">1×</button>
+          <button class="tl-speed-btn" data-speed="2">2×</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -2158,23 +2254,202 @@ function _applyTeachWidth() {
   }
 }
 
+/* ══════════════════════════════════════════════════
+   TIMELINE SCRUBBER CONTROLLER
+══════════════════════════════════════════════════ */
+var _tl = {
+  enabled: false,
+  steps: [],         /* array of arrays of draw commands (per step) */
+  stepLabels: [],    /* display label per step */
+  totalSteps: 0,
+  currentStep: -1,   /* -1 = before first step */
+  stepElIds: {},     /* stepIdx → [id, …] */
+  stepElBackup: {},  /* stepIdx → [{…element backup}] */
+  playing: false,
+  playTimer: null,
+  speed: 1,          /* 0.5 | 1 | 2 */
+};
+var _TL_BASE_DELAY = 1200; /* ms between steps at 1× speed */
+
+function _tlReset() {
+  if (_tl.playTimer) { clearTimeout(_tl.playTimer); _tl.playTimer = null; }
+  _tl.enabled = false;
+  _tl.steps = [];
+  _tl.stepLabels = [];
+  _tl.totalSteps = 0;
+  _tl.currentStep = -1;
+  _tl.stepElIds = {};
+  _tl.stepElBackup = {};
+  _tl.playing = false;
+  var bar = document.getElementById("timeline-bar");
+  if (bar) bar.style.display = "none";
+  var body = document.getElementById("teach-panel-body");
+  if (body) body.classList.remove("tl-active");
+}
+
+function _tlInit(commands) {
+  _tlReset();
+  if (!commands || !commands.length) return;
+  var hasSteps = commands.some(function(c) { return c && c.step != null; });
+  if (!hasSteps) return;
+
+  /* Group by step number */
+  var stepMap = {}, labelMap = {};
+  for (var i = 0; i < commands.length; i++) {
+    var cmd = commands[i];
+    var s = cmd.step != null ? Number(cmd.step) : 1;
+    if (!stepMap[s]) stepMap[s] = [];
+    stepMap[s].push(cmd);
+    if (cmd.stepLabel && !labelMap[s]) labelMap[s] = cmd.stepLabel;
+  }
+  var nums = Object.keys(stepMap).map(Number).sort(function(a, b) { return a - b; });
+  _tl.steps = nums.map(function(n) { return stepMap[n]; });
+  _tl.stepLabels = nums.map(function(n) { return labelMap[n] || ("Step " + n); });
+  _tl.totalSteps = _tl.steps.length;
+  _tl.enabled = true;
+
+  /* Show timeline bar */
+  var bar = document.getElementById("timeline-bar");
+  var scrubber = document.getElementById("tl-scrubber");
+  if (bar) {
+    bar.style.display = "flex";
+    if (scrubber) { scrubber.min = 0; scrubber.max = _tl.totalSteps - 1; scrubber.value = 0; }
+  }
+  var body = document.getElementById("teach-panel-body");
+  if (body) body.classList.add("tl-active");
+  _tlUpdateUI(-1);
+
+  /* Auto-play from step 0 after a short lead-in */
+  _tl.playing = true;
+  _tlUpdatePlayBtn();
+  _tl.playTimer = setTimeout(_tlAdvance, 450);
+}
+
+function _tlAdvance() {
+  if (!_tl.playing) return;
+  var next = _tl.currentStep + 1;
+  if (next >= _tl.totalSteps) {
+    _tl.playing = false;
+    _tlUpdatePlayBtn();
+    return;
+  }
+  _tlDrawStep(next);
+  _tl.currentStep = next;
+  _tlUpdateUI(next);
+  if (next < _tl.totalSteps - 1) {
+    _tl.playTimer = setTimeout(_tlAdvance, Math.round(_TL_BASE_DELAY / _tl.speed));
+  } else {
+    _tl.playing = false;
+    _tlUpdatePlayBtn();
+  }
+}
+
+function _tlGoToStep(n) {
+  if (!_tl.enabled) return;
+  n = Math.max(0, Math.min(n, _tl.totalSteps - 1));
+  if (n === _tl.currentStep) return;
+
+  if (n > _tl.currentStep) {
+    for (var i = Math.max(0, _tl.currentStep + 1); i <= n; i++) _tlDrawStep(i);
+  } else {
+    _tlHideAbove(n);
+  }
+  _tl.currentStep = n;
+  _tlUpdateUI(n);
+}
+
+function _tlDrawStep(idx) {
+  if (_tl.stepElIds[idx] !== undefined) { _tlShowStep(idx); return; }
+  var cmds = _tl.steps[idx] || [];
+  if (!cmds.length || !window._drawStepForTimeline) {
+    _tl.stepElIds[idx] = []; _tl.stepElBackup[idx] = []; return;
+  }
+  var result = window._drawStepForTimeline(cmds);
+  _tl.stepElIds[idx] = result.ids;
+  _tl.stepElBackup[idx] = result.backups;
+
+  /* Scroll to fit on first step */
+  if (idx === 0 && window._excalAPI && window._excalAPI.scrollToContent) {
+    setTimeout(function() {
+      var els = window._excalAPI ? window._excalAPI.getSceneElements() : null;
+      if (els && els.length) window._excalAPI.scrollToContent(els, { fitToViewport: true, viewportZoomFactor: 0.8 });
+    }, 200);
+  }
+}
+
+function _tlHideAbove(n) {
+  if (!window._updateSceneForTimeline) return;
+  var updates = [];
+  var from = n < 0 ? 0 : n + 1;
+  var to = _tl.currentStep < 0 ? _tl.totalSteps - 1 : _tl.currentStep;
+  for (var i = from; i <= to; i++) {
+    var ids = _tl.stepElIds[i] || [], bk = _tl.stepElBackup[i] || [];
+    for (var j = 0; j < ids.length; j++) updates.push({ id: ids[j], isDeleted: true, backup: bk[j] || null });
+  }
+  if (updates.length) window._updateSceneForTimeline(updates);
+}
+
+function _tlShowStep(idx) {
+  if (!window._updateSceneForTimeline) return;
+  var ids = _tl.stepElIds[idx] || [], bk = _tl.stepElBackup[idx] || [];
+  var updates = [];
+  for (var i = 0; i < ids.length; i++) updates.push({ id: ids[i], isDeleted: false, backup: bk[i] || null });
+  if (updates.length) window._updateSceneForTimeline(updates);
+}
+
+function _tlUpdateUI(stepIdx) {
+  var counter = document.getElementById("tl-step-counter");
+  var desc    = document.getElementById("tl-step-desc");
+  var scrubber = document.getElementById("tl-scrubber");
+  if (stepIdx < 0) {
+    if (counter) counter.textContent = "0 of " + _tl.totalSteps;
+    if (desc) desc.textContent = "Starting…";
+  } else {
+    if (counter) counter.textContent = "Step " + (stepIdx + 1) + " of " + _tl.totalSteps;
+    if (desc) desc.textContent = _tl.stepLabels[stepIdx] || "";
+    if (scrubber && String(scrubber.value) !== String(stepIdx)) scrubber.value = stepIdx;
+  }
+  _tlUpdatePlayBtn();
+}
+
+function _tlUpdatePlayBtn() {
+  var btn = document.getElementById("tl-play");
+  if (!btn) return;
+  if (_tl.playing) {
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+    btn.title = "Pause";
+  } else {
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+    btn.title = "Play";
+  }
+}
+
+/* ── Helpers shared by both open paths ── */
+function _hasStepMeta(cmds) {
+  return Array.isArray(cmds) && cmds.some(function(c) { return c && c.step != null; });
+}
+function _dispatchDraw(cmds) {
+  if (_hasStepMeta(cmds)) _tlInit(cmds);
+  else if (window._drawOnExcalidraw) window._drawOnExcalidraw(cmds);
+}
+
+/* ══════════════════════════════════════════════════ */
+
 let _pendingDrawCmds = [];
 
 function openTeachPanel(drawCommands) {
   console.log('[TeachPanel] openTeachPanel called, commands:', drawCommands ? drawCommands.length : 0);
   _pendingDrawCmds = drawCommands || [];
   if (_teachPanelOpen) {
-    console.log('[TeachPanel] Already open, drawing directly');
+    console.log('[TeachPanel] Already open, routing draw');
+    _tlReset();
     if (_pendingDrawCmds.length) {
-      if (window._excalAPI && window._drawOnExcalidraw) {
-        window._drawOnExcalidraw(_pendingDrawCmds);
-        _pendingDrawCmds = [];
+      var cmds = _pendingDrawCmds.slice();
+      _pendingDrawCmds = [];
+      if (window._excalAPI) {
+        _dispatchDraw(cmds);
       } else if (window._waitForExcalAPI) {
-        var cmds = _pendingDrawCmds.slice();
-        _pendingDrawCmds = [];
-        window._waitForExcalAPI(function() {
-          window._drawOnExcalidraw(cmds);
-        });
+        (function(cs) { window._waitForExcalAPI(function() { _dispatchDraw(cs); }); })(cmds);
       }
     }
     return;
@@ -2188,11 +2463,7 @@ function openTeachPanel(drawCommands) {
   panel.classList.add("open");
   if (main) main.style.marginRight = _teachPanelWidth + "px";
 
-  /* Wait for slide-in transition to finish, then:
-     1. Remove transform (translateX(0) creates a containing block that
-        offsets Excalidraw's pointer coordinate calculations)
-     2. Mount Excalidraw (so it caches the correct canvas position)
-     3. Poll for API readiness, then draw test shape + queued commands */
+  /* Wait for slide-in transition to finish, then mount Excalidraw and draw */
   var cmdsToExecute = _pendingDrawCmds.slice();
   _pendingDrawCmds = [];
 
@@ -2205,13 +2476,13 @@ function openTeachPanel(drawCommands) {
     if (tc && window._mountExcalidraw) {
       window._mountExcalidraw(tc);
       window.dispatchEvent(new Event("resize"));
-
-      /* Poll until API is ready, then draw backend commands */
-      if (cmdsToExecute.length && window._waitForExcalAPI) {
-        window._waitForExcalAPI(function() {
-          console.log('[TeachPanel] API ready — drawing', cmdsToExecute.length, 'commands');
-          if (window._drawOnExcalidraw) window._drawOnExcalidraw(cmdsToExecute);
-        });
+      if (window._waitForExcalAPI) {
+        (function(cs) {
+          window._waitForExcalAPI(function() {
+            console.log('[TeachPanel] API ready — dispatching', cs.length, 'commands');
+            _dispatchDraw(cs);
+          });
+        })(cmdsToExecute);
       }
     }
   }
@@ -2219,6 +2490,7 @@ function openTeachPanel(drawCommands) {
 }
 
 function closeTeachPanel() {
+  _tlReset(); /* stop any playing timeline before unmounting */
   _teachPanelOpen = false;
   var panel = document.getElementById("teach-panel");
   var main  = document.querySelector(".main");
@@ -2227,8 +2499,6 @@ function closeTeachPanel() {
   if (window._unmountExcalidraw) window._unmountExcalidraw();
 
   if (panel) {
-    /* Restore CSS transform for close animation:
-       clear inline "none" → CSS .open gives translateX(0) → remove .open → animates to translateX(100%) */
     panel.style.transform = "";
     panel.offsetHeight; /* force reflow so browser registers translateX(0) */
     panel.classList.remove("open");
@@ -2264,6 +2534,75 @@ document.addEventListener("DOMContentLoaded", function() {
       window._highlightOnCanvas(ref.dataset.hl);
     }
   });
+
+  /* ── Timeline controls ── */
+  (function() {
+    var tlPlay    = document.getElementById("tl-play");
+    var tlPrev    = document.getElementById("tl-prev");
+    var tlNext    = document.getElementById("tl-next");
+    var tlScrubber = document.getElementById("tl-scrubber");
+
+    function pauseTimeline() {
+      if (!_tl.playing) return;
+      _tl.playing = false;
+      if (_tl.playTimer) { clearTimeout(_tl.playTimer); _tl.playTimer = null; }
+      _tlUpdatePlayBtn();
+    }
+
+    if (tlPlay) {
+      tlPlay.addEventListener("click", function() {
+        if (!_tl.enabled) return;
+        if (_tl.playing) {
+          pauseTimeline();
+        } else {
+          /* Restart from beginning if already at last step */
+          if (_tl.currentStep >= _tl.totalSteps - 1) {
+            _tlHideAbove(-1);
+            _tl.currentStep = -1;
+            _tlUpdateUI(-1);
+          }
+          _tl.playing = true;
+          _tlUpdatePlayBtn();
+          _tlAdvance();
+        }
+      });
+    }
+
+    if (tlPrev) {
+      tlPrev.addEventListener("click", function() {
+        if (!_tl.enabled) return;
+        pauseTimeline();
+        _tlGoToStep(_tl.currentStep - 1);
+      });
+    }
+
+    if (tlNext) {
+      tlNext.addEventListener("click", function() {
+        if (!_tl.enabled) return;
+        pauseTimeline();
+        _tlGoToStep(_tl.currentStep + 1);
+      });
+    }
+
+    if (tlScrubber) {
+      tlScrubber.addEventListener("mousedown", function() { pauseTimeline(); });
+      tlScrubber.addEventListener("touchstart", function() { pauseTimeline(); }, { passive: true });
+      tlScrubber.addEventListener("input", function() {
+        if (!_tl.enabled) return;
+        _tlGoToStep(parseInt(this.value, 10));
+      });
+    }
+
+    document.querySelectorAll(".tl-speed-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        document.querySelectorAll(".tl-speed-btn").forEach(function(b) {
+          b.classList.remove("tl-speed-active");
+        });
+        this.classList.add("tl-speed-active");
+        _tl.speed = parseFloat(this.dataset.speed);
+      });
+    });
+  })();
 });
 
 /* ── Sketchfab 3D Model Viewer ───────────────────── */

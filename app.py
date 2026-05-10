@@ -1726,248 +1726,260 @@ def _generate_draw_commands(answer, user_msg):
 #  Preset diagrams
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def _step(step_n: int, label: str, commands: list) -> list:
+    """Tag a list of command dicts with step number and label metadata."""
+    tagged = []
+    for i, cmd in enumerate(commands):
+        cmd = dict(cmd)
+        cmd["step"] = step_n
+        if i == 0:
+            cmd["stepLabel"] = label
+        tagged.append(cmd)
+    return tagged
+
+
 def _diagram_cell_biology():
     """Animal cell — scientifically accurate placement with function labels."""
     c = []
 
-    # ── Title ──
-    c.append({"type": "text", "x": 150, "y": -30,
-              "text": "Animal Cell Structure", "color": "#ffffff", "fontSize": 24})
+    # Step 1: Cell Membrane (outer container + title)
+    c += _step(1, "Cell Membrane", [
+        {"type": "text", "x": 150, "y": -30,
+         "text": "Animal Cell Structure", "color": "#ffffff", "fontSize": 24},
+        {"type": "ellipse", "x": 20, "y": 20, "width": 560, "height": 440,
+         "color": "#74c0fc", "strokeWidth": 3, "fill": "transparent"},
+        {"type": "text", "x": 215, "y": 465,
+         "text": "Cell Membrane", "color": "#74c0fc", "fontSize": 15},
+        {"type": "text", "x": 430, "y": 400,
+         "text": "Cytoplasm", "color": "#495057", "fontSize": 13},
+    ])
 
-    # ── Cell Membrane (outer boundary) ──
-    c.append({"type": "ellipse", "x": 20, "y": 20, "width": 560, "height": 440,
-              "color": "#74c0fc", "strokeWidth": 3, "fill": "transparent"})
-    c.append({"type": "text", "x": 215, "y": 465,
-              "text": "Cell Membrane", "color": "#74c0fc", "fontSize": 15})
+    # Step 2: Nucleus + Nucleolus
+    c += _step(2, "Nucleus", [
+        {"type": "ellipse", "x": 170, "y": 110, "width": 210, "height": 180,
+         "color": "#b197fc", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 235, "y": 175,
+         "text": "Nucleus", "color": "#b197fc", "fontSize": 17},
+        {"type": "text", "x": 218, "y": 198,
+         "text": "Contains DNA", "color": "#9775fa", "fontSize": 12},
+        {"type": "ellipse", "x": 243, "y": 220, "width": 55, "height": 45,
+         "color": "#e599f7", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 237, "y": 270,
+         "text": "Nucleolus", "color": "#e599f7", "fontSize": 11},
+    ])
 
-    # Cytoplasm label (subtle, inside cell)
-    c.append({"type": "text", "x": 430, "y": 400,
-              "text": "Cytoplasm", "color": "#495057", "fontSize": 13})
+    # Step 3: Mitochondria
+    c += _step(3, "Mitochondria", [
+        {"type": "ellipse", "x": 405, "y": 125, "width": 130, "height": 70,
+         "color": "#ff8787", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "ellipse", "x": 430, "y": 138, "width": 75, "height": 44,
+         "color": "#ff6b6b", "strokeWidth": 1, "fill": "transparent"},
+        {"type": "text", "x": 410, "y": 200,
+         "text": "Mitochondria", "color": "#ff8787", "fontSize": 14},
+        {"type": "text", "x": 405, "y": 218,
+         "text": "Produces energy (ATP)", "color": "#fa5252", "fontSize": 11},
+        {"type": "ellipse", "x": 435, "y": 240, "width": 90, "height": 50,
+         "color": "#ff8787", "strokeWidth": 1, "fill": "transparent"},
+    ])
 
-    # ── Nucleus (centre, largest organelle) ──
-    c.append({"type": "ellipse", "x": 170, "y": 110, "width": 210, "height": 180,
-              "color": "#b197fc", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 235, "y": 175,
-              "text": "Nucleus", "color": "#b197fc", "fontSize": 17})
-    c.append({"type": "text", "x": 218, "y": 198,
-              "text": "Contains DNA", "color": "#9775fa", "fontSize": 12})
-
-    # Nucleolus (inside nucleus)
-    c.append({"type": "ellipse", "x": 243, "y": 220, "width": 55, "height": 45,
-              "color": "#e599f7", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 237, "y": 270,
-              "text": "Nucleolus", "color": "#e599f7", "fontSize": 11})
-
-    # ── Mitochondria (right side — oval with inner fold) ──
-    # Outer membrane
-    c.append({"type": "ellipse", "x": 405, "y": 125, "width": 130, "height": 70,
-              "color": "#ff8787", "strokeWidth": 2, "fill": "transparent"})
-    # Inner membrane fold (cristae)
-    c.append({"type": "ellipse", "x": 430, "y": 138, "width": 75, "height": 44,
-              "color": "#ff6b6b", "strokeWidth": 1, "fill": "transparent"})
-    c.append({"type": "text", "x": 410, "y": 200,
-              "text": "Mitochondria", "color": "#ff8787", "fontSize": 14})
-    c.append({"type": "text", "x": 405, "y": 218,
-              "text": "Produces energy (ATP)", "color": "#fa5252", "fontSize": 11})
-    # Second smaller mitochondrion
-    c.append({"type": "ellipse", "x": 435, "y": 240, "width": 90, "height": 50,
-              "color": "#ff8787", "strokeWidth": 1, "fill": "transparent"})
-
-    # ── Rough Endoplasmic Reticulum (left of nucleus) ──
-    c.append({"type": "rectangle", "x": 50, "y": 130, "width": 100, "height": 130,
-              "color": "#69db7c", "strokeWidth": 2, "fill": "transparent"})
-    # Internal folds (parallel lines)
+    # Step 4: Endoplasmic Reticulum (Rough + Smooth)
+    er_cmds = [
+        {"type": "rectangle", "x": 50, "y": 130, "width": 100, "height": 130,
+         "color": "#69db7c", "strokeWidth": 2, "fill": "transparent"},
+    ]
     for ly in [160, 190, 220]:
-        c.append({"type": "line", "from": [60, ly], "to": [140, ly],
-                  "color": "#69db7c", "strokeWidth": 1})
-    c.append({"type": "text", "x": 52, "y": 268,
-              "text": "Rough ER", "color": "#69db7c", "fontSize": 14})
-    c.append({"type": "text", "x": 38, "y": 286,
-              "text": "Protein synthesis", "color": "#51cf66", "fontSize": 11})
-    # Ribosomes on Rough ER (small filled dots on edges)
-    for rx, ry in [(45, 153), (45, 183), (45, 213),
-                   (152, 153), (152, 183), (152, 213)]:
-        c.append({"type": "ellipse", "x": rx, "y": ry, "width": 8, "height": 8,
-                  "color": "#868e96", "strokeWidth": 1, "fill": "#868e96"})
-    c.append({"type": "text", "x": 40, "y": 302,
-              "text": "( dots = Ribosomes )", "color": "#868e96", "fontSize": 10})
+        er_cmds.append({"type": "line", "from": [60, ly], "to": [140, ly],
+                         "color": "#69db7c", "strokeWidth": 1})
+    er_cmds += [
+        {"type": "text", "x": 52, "y": 268, "text": "Rough ER",
+         "color": "#69db7c", "fontSize": 14},
+        {"type": "text", "x": 38, "y": 286, "text": "Protein synthesis",
+         "color": "#51cf66", "fontSize": 11},
+    ]
+    for rx, ry in [(45, 153), (45, 183), (45, 213), (152, 153), (152, 183), (152, 213)]:
+        er_cmds.append({"type": "ellipse", "x": rx, "y": ry, "width": 8, "height": 8,
+                         "color": "#868e96", "strokeWidth": 1, "fill": "#868e96"})
+    er_cmds += [
+        {"type": "text", "x": 40, "y": 302, "text": "( dots = Ribosomes )",
+         "color": "#868e96", "fontSize": 10},
+        {"type": "rectangle", "x": 60, "y": 330, "width": 95, "height": 70,
+         "color": "#38d9a9", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "line", "from": [70, 352], "to": [145, 352],
+         "color": "#38d9a9", "strokeWidth": 1},
+        {"type": "line", "from": [70, 374], "to": [145, 374],
+         "color": "#38d9a9", "strokeWidth": 1},
+        {"type": "text", "x": 52, "y": 408, "text": "Smooth ER",
+         "color": "#38d9a9", "fontSize": 13},
+        {"type": "text", "x": 45, "y": 425, "text": "Lipid synthesis",
+         "color": "#20c997", "fontSize": 11},
+        {"type": "line", "from": [100, 260], "to": [100, 330],
+         "color": "#51cf66", "strokeWidth": 1},
+    ]
+    c += _step(4, "Endoplasmic Reticulum", er_cmds)
 
-    # ── Smooth ER (below Rough ER, connected) ──
-    c.append({"type": "rectangle", "x": 60, "y": 330, "width": 95, "height": 70,
-              "color": "#38d9a9", "strokeWidth": 2, "fill": "transparent"})
-    for ly in [352, 374]:
-        c.append({"type": "line", "from": [70, ly], "to": [145, ly],
-                  "color": "#38d9a9", "strokeWidth": 1})
-    c.append({"type": "text", "x": 52, "y": 408,
-              "text": "Smooth ER", "color": "#38d9a9", "fontSize": 13})
-    c.append({"type": "text", "x": 45, "y": 425,
-              "text": "Lipid synthesis", "color": "#20c997", "fontSize": 11})
-    # Connection line Rough → Smooth
-    c.append({"type": "line", "from": [100, 260], "to": [100, 330],
-              "color": "#51cf66", "strokeWidth": 1})
-
-    # ── Golgi Apparatus (lower-right — stacked layers) ──
+    # Step 5: Golgi Apparatus + Vesicles
+    golgi_cmds = []
     for i in range(4):
-        c.append({"type": "ellipse", "x": 350, "y": 310 + i * 20,
-                  "width": 150, "height": 22,
-                  "color": "#ffd43b", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 355, "y": 395,
-              "text": "Golgi Apparatus", "color": "#ffd43b", "fontSize": 14})
-    c.append({"type": "text", "x": 350, "y": 413,
-              "text": "Packages & ships proteins", "color": "#fcc419", "fontSize": 11})
+        golgi_cmds.append({"type": "ellipse", "x": 350, "y": 310 + i * 20,
+                            "width": 150, "height": 22,
+                            "color": "#ffd43b", "strokeWidth": 2, "fill": "transparent"})
+    golgi_cmds += [
+        {"type": "text", "x": 355, "y": 395, "text": "Golgi Apparatus",
+         "color": "#ffd43b", "fontSize": 14},
+        {"type": "text", "x": 350, "y": 413, "text": "Packages & ships proteins",
+         "color": "#fcc419", "fontSize": 11},
+        {"type": "ellipse", "x": 508, "y": 320, "width": 22, "height": 22,
+         "color": "#ffa94d", "strokeWidth": 1, "fill": "transparent"},
+        {"type": "ellipse", "x": 515, "y": 350, "width": 18, "height": 18,
+         "color": "#ffa94d", "strokeWidth": 1, "fill": "transparent"},
+        {"type": "text", "x": 500, "y": 375, "text": "Vesicles",
+         "color": "#ffa94d", "fontSize": 11},
+    ]
+    c += _step(5, "Golgi Apparatus", golgi_cmds)
 
-    # Vesicles (small circles budding off Golgi)
-    c.append({"type": "ellipse", "x": 508, "y": 320, "width": 22, "height": 22,
-              "color": "#ffa94d", "strokeWidth": 1, "fill": "transparent"})
-    c.append({"type": "ellipse", "x": 515, "y": 350, "width": 18, "height": 18,
-              "color": "#ffa94d", "strokeWidth": 1, "fill": "transparent"})
-    c.append({"type": "text", "x": 500, "y": 375,
-              "text": "Vesicles", "color": "#ffa94d", "fontSize": 11})
-
-    # ── Lysosome (bottom-centre) ──
-    c.append({"type": "ellipse", "x": 210, "y": 350, "width": 60, "height": 60,
-              "color": "#f06595", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 200, "y": 416,
-              "text": "Lysosome", "color": "#f06595", "fontSize": 13})
-    c.append({"type": "text", "x": 185, "y": 433,
-              "text": "Waste digestion", "color": "#e64980", "fontSize": 11})
-
-    # ── Centrosome (upper-right) ──
-    c.append({"type": "ellipse", "x": 420, "y": 55, "width": 42, "height": 42,
-              "color": "#4dabf7", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 405, "y": 102,
-              "text": "Centrosome", "color": "#4dabf7", "fontSize": 12})
-    c.append({"type": "text", "x": 405, "y": 117,
-              "text": "Cell division", "color": "#339af0", "fontSize": 10})
+    # Step 6: Lysosome + Centrosome
+    c += _step(6, "Lysosome & Centrosome", [
+        {"type": "ellipse", "x": 210, "y": 350, "width": 60, "height": 60,
+         "color": "#f06595", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 200, "y": 416, "text": "Lysosome",
+         "color": "#f06595", "fontSize": 13},
+        {"type": "text", "x": 185, "y": 433, "text": "Waste digestion",
+         "color": "#e64980", "fontSize": 11},
+        {"type": "ellipse", "x": 420, "y": 55, "width": 42, "height": 42,
+         "color": "#4dabf7", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 405, "y": 102, "text": "Centrosome",
+         "color": "#4dabf7", "fontSize": 12},
+        {"type": "text", "x": 405, "y": 117, "text": "Cell division",
+         "color": "#339af0", "fontSize": 10},
+    ])
 
     return c
 
 
 def _diagram_newtons_laws():
     """Newton's three laws — labelled boxes with descriptions + illustration."""
-    c = []
     bw, bh = 160, 60
-    desc_w = 260
     gap = 60
     x0 = 40
+    c = []
 
-    c.append({"type": "text", "x": 100, "y": 10,
-              "text": "Newton's Laws of Motion", "color": "#ffffff", "fontSize": 24})
+    # Step 1: Title
+    c += _step(1, "Newton's Laws", [
+        {"type": "text", "x": 100, "y": 10,
+         "text": "Newton's Laws of Motion", "color": "#ffffff", "fontSize": 24},
+    ])
 
     laws = [
-        ("1st Law — Inertia",
+        (2, "1st Law: Inertia",
+         "1st Law — Inertia",
          "An object at rest stays at rest\nunless acted on by a force.",
          "#74c0fc"),
-        ("2nd Law — F = ma",
+        (3, "2nd Law: F = ma",
+         "2nd Law — F = ma",
          "Force equals mass times\nacceleration.  F = m × a",
          "#69db7c"),
-        ("3rd Law — Action-Reaction",
+        (4, "3rd Law: Action-Reaction",
+         "3rd Law — Action-Reaction",
          "Every action has an equal\nand opposite reaction.",
          "#ffa94d"),
     ]
 
-    for i, (title, desc, color) in enumerate(laws):
+    for i, (step_n, step_label, title, desc, color) in enumerate(laws):
         y = 60 + i * (bh + gap)
-
-        # Title box
-        c.append({"type": "rectangle", "x": x0, "y": y,
-                  "width": bw, "height": bh,
-                  "color": color, "strokeWidth": 2, "fill": "transparent"})
-        c.append({"type": "text", "x": x0 + 12, "y": y + 15,
-                  "text": title, "color": color, "fontSize": 14})
-
-        # Description to the right
-        c.append({"type": "text", "x": x0 + bw + 30, "y": y + 12,
-                  "text": desc, "color": "#dee2e6", "fontSize": 15})
-
-        # Arrow to next law
+        law_cmds = [
+            {"type": "rectangle", "x": x0, "y": y,
+             "width": bw, "height": bh,
+             "color": color, "strokeWidth": 2, "fill": "transparent"},
+            {"type": "text", "x": x0 + 12, "y": y + 15,
+             "text": title, "color": color, "fontSize": 14},
+            {"type": "text", "x": x0 + bw + 30, "y": y + 12,
+             "text": desc, "color": "#dee2e6", "fontSize": 15},
+        ]
         if i < 2:
-            c.append({"type": "arrow",
-                       "from": [x0 + bw // 2, y + bh],
-                       "to":   [x0 + bw // 2, y + bh + gap],
-                       "color": "#868e96", "strokeWidth": 2})
+            law_cmds.append({"type": "arrow",
+                              "from": [x0 + bw // 2, y + bh],
+                              "to":   [x0 + bw // 2, y + bh + gap],
+                              "color": "#868e96", "strokeWidth": 2})
+        c += _step(step_n, step_label, law_cmds)
 
-    # ── Force illustration at bottom ──
+    # Step 5: Force illustration
     y_bot = 60 + 3 * (bh + gap) + 10
-    c.append({"type": "text", "x": x0, "y": y_bot - 5,
-              "text": "Illustration:", "color": "#868e96", "fontSize": 13})
-    # Object (rectangle)
-    c.append({"type": "rectangle", "x": 200, "y": y_bot + 15,
-              "width": 70, "height": 50,
-              "color": "#dee2e6", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 215, "y": y_bot + 30,
-              "text": "Box", "color": "#dee2e6", "fontSize": 14})
-    # Action arrow →
-    c.append({"type": "arrow", "from": [270, y_bot + 30], "to": [380, y_bot + 30],
-              "color": "#ff8787", "strokeWidth": 3})
-    c.append({"type": "text", "x": 295, "y": y_bot + 12,
-              "text": "Action", "color": "#ff8787", "fontSize": 13})
-    # Reaction arrow ←
-    c.append({"type": "arrow", "from": [200, y_bot + 50], "to": [90, y_bot + 50],
-              "color": "#74c0fc", "strokeWidth": 3})
-    c.append({"type": "text", "x": 110, "y": y_bot + 55,
-              "text": "Reaction", "color": "#74c0fc", "fontSize": 13})
+    c += _step(5, "Force Illustration", [
+        {"type": "text", "x": x0, "y": y_bot - 5,
+         "text": "Illustration:", "color": "#868e96", "fontSize": 13},
+        {"type": "rectangle", "x": 200, "y": y_bot + 15,
+         "width": 70, "height": 50,
+         "color": "#dee2e6", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 215, "y": y_bot + 30,
+         "text": "Box", "color": "#dee2e6", "fontSize": 14},
+        {"type": "arrow", "from": [270, y_bot + 30], "to": [380, y_bot + 30],
+         "color": "#ff8787", "strokeWidth": 3},
+        {"type": "text", "x": 295, "y": y_bot + 12,
+         "text": "Action", "color": "#ff8787", "fontSize": 13},
+        {"type": "arrow", "from": [200, y_bot + 50], "to": [90, y_bot + 50],
+         "color": "#74c0fc", "strokeWidth": 3},
+        {"type": "text", "x": 110, "y": y_bot + 55,
+         "text": "Reaction", "color": "#74c0fc", "fontSize": 13},
+    ])
 
     return c
 
 
 def _diagram_math_order():
     """PEMDAS order of operations — numbered steps + worked example."""
-    c = []
     bw, bh = 280, 50
     gap = 35
     x0 = 80
+    c = []
 
-    c.append({"type": "text", "x": 60, "y": 10,
-              "text": "Order of Operations (PEMDAS)", "color": "#ffffff", "fontSize": 24})
-
-    steps = [
-        ("1", "Parentheses  ( )", "#ff8787"),
-        ("2", "Exponents  x^n", "#ffa94d"),
-        ("3", "Multiply & Divide  × ÷", "#ffd43b"),
-        ("4", "Add & Subtract  + −", "#69db7c"),
+    pemdas = [
+        (1, "Parentheses",    "1", "Parentheses  ( )",      "#ff8787"),
+        (2, "Exponents",      "2", "Exponents  x^n",        "#ffa94d"),
+        (3, "Multiply/Divide","3", "Multiply & Divide  × ÷","#ffd43b"),
+        (4, "Add & Subtract", "4", "Add & Subtract  + −",   "#69db7c"),
     ]
 
-    for i, (num, desc, color) in enumerate(steps):
-        y = 60 + i * (bh + gap)
+    for step_n, step_label, num, desc, color in pemdas:
+        y = 60 + (step_n - 1) * (bh + gap)
+        row = []
+        if step_n == 1:
+            row.append({"type": "text", "x": 60, "y": 10,
+                        "text": "Order of Operations (PEMDAS)", "color": "#ffffff", "fontSize": 24})
+        row += [
+            {"type": "ellipse", "x": 30, "y": y + 8, "width": 34, "height": 34,
+             "color": color, "strokeWidth": 2, "fill": "transparent"},
+            {"type": "text", "x": 40, "y": y + 14, "text": num,
+             "color": color, "fontSize": 16},
+            {"type": "rectangle", "x": x0, "y": y, "width": bw, "height": bh,
+             "color": color, "strokeWidth": 2, "fill": "transparent"},
+            {"type": "text", "x": x0 + 15, "y": y + 14, "text": desc,
+             "color": color, "fontSize": 16},
+        ]
+        if step_n < 4:
+            row.append({"type": "arrow",
+                        "from": [x0 + bw // 2, y + bh],
+                        "to":   [x0 + bw // 2, y + bh + gap],
+                        "color": "#868e96", "strokeWidth": 1})
+        c += _step(step_n, step_label, row)
 
-        # Step number circle
-        c.append({"type": "ellipse", "x": 30, "y": y + 8,
-                  "width": 34, "height": 34,
-                  "color": color, "strokeWidth": 2, "fill": "transparent"})
-        c.append({"type": "text", "x": 40, "y": y + 14,
-                  "text": num, "color": color, "fontSize": 16})
-
-        # Description box
-        c.append({"type": "rectangle", "x": x0, "y": y,
-                  "width": bw, "height": bh,
-                  "color": color, "strokeWidth": 2, "fill": "transparent"})
-        c.append({"type": "text", "x": x0 + 15, "y": y + 14,
-                  "text": desc, "color": color, "fontSize": 16})
-
-        # Arrow down
-        if i < 3:
-            c.append({"type": "arrow",
-                       "from": [x0 + bw // 2, y + bh],
-                       "to":   [x0 + bw // 2, y + bh + gap],
-                       "color": "#868e96", "strokeWidth": 1})
-
-    # ── Worked example ──
+    # Step 5: Worked example
     ey = 60 + 4 * (bh + gap) + 5
-    c.append({"type": "text", "x": 40, "y": ey,
-              "text": "Example:  2 + 3 × (4² − 1)", "color": "#dee2e6", "fontSize": 18})
-    c.append({"type": "text", "x": 40, "y": ey + 30,
-              "text": "Step 1  →  2 + 3 × (16 − 1)     parentheses first",
-              "color": "#ff8787", "fontSize": 14})
-    c.append({"type": "text", "x": 40, "y": ey + 52,
-              "text": "Step 2  →  2 + 3 × 15            exponent done",
-              "color": "#ffa94d", "fontSize": 14})
-    c.append({"type": "text", "x": 40, "y": ey + 74,
-              "text": "Step 3  →  2 + 45                 multiply",
-              "color": "#ffd43b", "fontSize": 14})
-    c.append({"type": "text", "x": 40, "y": ey + 96,
-              "text": "Step 4  →  47                     add",
-              "color": "#69db7c", "fontSize": 14})
+    c += _step(5, "Worked Example", [
+        {"type": "text", "x": 40, "y": ey,
+         "text": "Example:  2 + 3 × (4² − 1)", "color": "#dee2e6", "fontSize": 18},
+        {"type": "text", "x": 40, "y": ey + 30,
+         "text": "Step 1  →  2 + 3 × (16 − 1)     parentheses first",
+         "color": "#ff8787", "fontSize": 14},
+        {"type": "text", "x": 40, "y": ey + 52,
+         "text": "Step 2  →  2 + 3 × 15            exponent done",
+         "color": "#ffa94d", "fontSize": 14},
+        {"type": "text", "x": 40, "y": ey + 74,
+         "text": "Step 3  →  2 + 45                 multiply",
+         "color": "#ffd43b", "fontSize": 14},
+        {"type": "text", "x": 40, "y": ey + 96,
+         "text": "Step 4  →  47                     add",
+         "color": "#69db7c", "fontSize": 14},
+    ])
 
     return c
 
@@ -1976,80 +1988,81 @@ def _diagram_water_cycle():
     """Water cycle — circular flow with ground, cloud, and labelled stages."""
     c = []
 
-    c.append({"type": "text", "x": 160, "y": 5,
-              "text": "The Water Cycle", "color": "#ffffff", "fontSize": 24})
+    # Step 1: Title + Sun
+    c += _step(1, "Sun (Energy Source)", [
+        {"type": "text", "x": 160, "y": 5,
+         "text": "The Water Cycle", "color": "#ffffff", "fontSize": 24},
+        {"type": "ellipse", "x": 20, "y": 45, "width": 65, "height": 65,
+         "color": "#ffd43b", "strokeWidth": 2, "fill": "#ffd43b"},
+        {"type": "text", "x": 30, "y": 115, "text": "Sun",
+         "color": "#ffd43b", "fontSize": 14},
+        {"type": "line", "from": [85, 60], "to": [115, 50],
+         "color": "#ffd43b", "strokeWidth": 2},
+        {"type": "line", "from": [85, 78], "to": [120, 78],
+         "color": "#ffd43b", "strokeWidth": 2},
+    ])
 
-    # ── Sun (top-left) ──
-    c.append({"type": "ellipse", "x": 20, "y": 45, "width": 65, "height": 65,
-              "color": "#ffd43b", "strokeWidth": 2, "fill": "#ffd43b"})
-    c.append({"type": "text", "x": 30, "y": 115,
-              "text": "Sun", "color": "#ffd43b", "fontSize": 14})
-    # Sun rays
-    c.append({"type": "line", "from": [85, 60], "to": [115, 50],
-              "color": "#ffd43b", "strokeWidth": 2})
-    c.append({"type": "line", "from": [85, 78], "to": [120, 78],
-              "color": "#ffd43b", "strokeWidth": 2})
+    # Step 2: Clouds
+    c += _step(2, "Clouds", [
+        {"type": "ellipse", "x": 300, "y": 50, "width": 100, "height": 55,
+         "color": "#dee2e6", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "ellipse", "x": 350, "y": 40, "width": 110, "height": 65,
+         "color": "#dee2e6", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 350, "y": 112, "text": "Clouds",
+         "color": "#dee2e6", "fontSize": 14},
+    ])
 
-    # ── Cloud (top-centre-right) — overlapping ellipses ──
-    c.append({"type": "ellipse", "x": 300, "y": 50, "width": 100, "height": 55,
-              "color": "#dee2e6", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "ellipse", "x": 350, "y": 40, "width": 110, "height": 65,
-              "color": "#dee2e6", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 350, "y": 112,
-              "text": "Clouds", "color": "#dee2e6", "fontSize": 14})
+    # Step 3: Ground + Water body
+    c += _step(3, "Ground & Ocean", [
+        {"type": "rectangle", "x": 30, "y": 340, "width": 500, "height": 70,
+         "color": "#495057", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 40, "y": 365, "text": "Ground / Soil",
+         "color": "#868e96", "fontSize": 13},
+        {"type": "ellipse", "x": 50, "y": 280, "width": 180, "height": 60,
+         "color": "#339af0", "strokeWidth": 2, "fill": "transparent"},
+        {"type": "text", "x": 95, "y": 300, "text": "Ocean / Lake",
+         "color": "#339af0", "fontSize": 14},
+    ])
 
-    # ── Ground / landscape (bottom) ──
-    c.append({"type": "rectangle", "x": 30, "y": 340, "width": 500, "height": 70,
-              "color": "#495057", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 40, "y": 365,
-              "text": "Ground / Soil", "color": "#868e96", "fontSize": 13})
+    # Step 4: Mountain
+    c += _step(4, "Mountain", [
+        {"type": "line", "from": [400, 340], "to": [460, 230],
+         "color": "#868e96", "strokeWidth": 2},
+        {"type": "line", "from": [460, 230], "to": [520, 340],
+         "color": "#868e96", "strokeWidth": 2},
+        {"type": "text", "x": 430, "y": 290, "text": "Mountain",
+         "color": "#868e96", "fontSize": 11},
+    ])
 
-    # ── Water body (lower-left) ──
-    c.append({"type": "ellipse", "x": 50, "y": 280, "width": 180, "height": 60,
-              "color": "#339af0", "strokeWidth": 2, "fill": "transparent"})
-    c.append({"type": "text", "x": 95, "y": 300,
-              "text": "Ocean / Lake", "color": "#339af0", "fontSize": 14})
+    # Step 5: Evaporation
+    c += _step(5, "Evaporation", [
+        {"type": "arrow", "from": [170, 280], "to": [310, 105],
+         "color": "#ff8787", "strokeWidth": 2},
+        {"type": "text", "x": 175, "y": 175, "text": "Evaporation",
+         "color": "#ff8787", "fontSize": 14},
+        {"type": "text", "x": 178, "y": 193, "text": "(liquid → gas)",
+         "color": "#fa5252", "fontSize": 11},
+    ])
 
-    # ── Mountain (right side) ──
-    c.append({"type": "line", "from": [400, 340], "to": [460, 230],
-              "color": "#868e96", "strokeWidth": 2})
-    c.append({"type": "line", "from": [460, 230], "to": [520, 340],
-              "color": "#868e96", "strokeWidth": 2})
-    c.append({"type": "text", "x": 430, "y": 290,
-              "text": "Mountain", "color": "#868e96", "fontSize": 11})
-
-    # ── Arrows with process labels ──
-    # Evaporation (water → cloud, upward)
-    c.append({"type": "arrow", "from": [170, 280], "to": [310, 105],
-              "color": "#ff8787", "strokeWidth": 2})
-    c.append({"type": "text", "x": 175, "y": 175,
-              "text": "Evaporation", "color": "#ff8787", "fontSize": 14})
-    c.append({"type": "text", "x": 178, "y": 193,
-              "text": "(liquid → gas)", "color": "#fa5252", "fontSize": 11})
-
-    # Condensation (label near cloud)
-    c.append({"type": "text", "x": 310, "y": 130,
-              "text": "Condensation", "color": "#b197fc", "fontSize": 14})
-    c.append({"type": "text", "x": 315, "y": 148,
-              "text": "(gas → liquid)", "color": "#9775fa", "fontSize": 11})
-
-    # Precipitation (cloud → ground, downward)
-    c.append({"type": "arrow", "from": [420, 105], "to": [370, 280],
-              "color": "#74c0fc", "strokeWidth": 2})
-    c.append({"type": "text", "x": 400, "y": 195,
-              "text": "Precipitation", "color": "#74c0fc", "fontSize": 14})
-    c.append({"type": "text", "x": 410, "y": 213,
-              "text": "(rain / snow)", "color": "#4dabf7", "fontSize": 11})
-
-    # Runoff (mountain → water, along ground)
-    c.append({"type": "arrow", "from": [400, 338], "to": [230, 308],
-              "color": "#69db7c", "strokeWidth": 2})
-    c.append({"type": "text", "x": 280, "y": 318,
-              "text": "Runoff", "color": "#69db7c", "fontSize": 13})
-
-    # Collection label
-    c.append({"type": "text", "x": 55, "y": 345,
-              "text": "Collection", "color": "#339af0", "fontSize": 12})
+    # Step 6: Condensation + Precipitation + Runoff + Collection
+    c += _step(6, "Condensation & Precipitation", [
+        {"type": "text", "x": 310, "y": 130, "text": "Condensation",
+         "color": "#b197fc", "fontSize": 14},
+        {"type": "text", "x": 315, "y": 148, "text": "(gas → liquid)",
+         "color": "#9775fa", "fontSize": 11},
+        {"type": "arrow", "from": [420, 105], "to": [370, 280],
+         "color": "#74c0fc", "strokeWidth": 2},
+        {"type": "text", "x": 400, "y": 195, "text": "Precipitation",
+         "color": "#74c0fc", "fontSize": 14},
+        {"type": "text", "x": 410, "y": 213, "text": "(rain / snow)",
+         "color": "#4dabf7", "fontSize": 11},
+        {"type": "arrow", "from": [400, 338], "to": [230, 308],
+         "color": "#69db7c", "strokeWidth": 2},
+        {"type": "text", "x": 280, "y": 318, "text": "Runoff",
+         "color": "#69db7c", "fontSize": 13},
+        {"type": "text", "x": 55, "y": 345, "text": "Collection",
+         "color": "#339af0", "fontSize": 12},
+    ])
 
     return c
 
@@ -2058,66 +2071,76 @@ def _diagram_photosynthesis():
     """Photosynthesis — inputs → chloroplast → outputs with equation."""
     c = []
 
-    c.append({"type": "text", "x": 130, "y": 5,
-              "text": "Photosynthesis", "color": "#ffffff", "fontSize": 24})
-
-    # ── Inputs (left) ──
-    inp = [
+    # Step 1: Title + Inputs (left)
+    inp_cmds = [
+        {"type": "text", "x": 130, "y": 5,
+         "text": "Photosynthesis", "color": "#ffffff", "fontSize": 24},
+    ]
+    for label, color, x, y in [
         ("Sunlight (energy)", "#ffd43b", 30, 70),
         ("Water  H2O", "#74c0fc", 30, 165),
         ("Carbon Dioxide  CO2", "#adb5bd", 30, 260),
-    ]
-    for label, color, x, y in inp:
-        c.append({"type": "rectangle", "x": x, "y": y,
-                  "width": 170, "height": 55,
-                  "color": color, "strokeWidth": 2, "fill": "transparent"})
-        c.append({"type": "text", "x": x + 12, "y": y + 15,
-                  "text": label, "color": color, "fontSize": 14})
+    ]:
+        inp_cmds += [
+            {"type": "rectangle", "x": x, "y": y, "width": 170, "height": 55,
+             "color": color, "strokeWidth": 2, "fill": "transparent"},
+            {"type": "text", "x": x + 12, "y": y + 15,
+             "text": label, "color": color, "fontSize": 14},
+        ]
+    c += _step(1, "Inputs", inp_cmds)
 
-    # ── Central process (chloroplast) ──
-    c.append({"type": "ellipse", "x": 250, "y": 120, "width": 150, "height": 130,
-              "color": "#69db7c", "strokeWidth": 3, "fill": "transparent"})
-    c.append({"type": "text", "x": 278, "y": 160,
-              "text": "Chloroplast", "color": "#69db7c", "fontSize": 16})
-    c.append({"type": "text", "x": 273, "y": 183,
-              "text": "Light-dependent", "color": "#51cf66", "fontSize": 12})
-    c.append({"type": "text", "x": 286, "y": 199,
-              "text": "reactions", "color": "#51cf66", "fontSize": 12})
+    # Step 2: Chloroplast
+    c += _step(2, "Chloroplast", [
+        {"type": "ellipse", "x": 250, "y": 120, "width": 150, "height": 130,
+         "color": "#69db7c", "strokeWidth": 3, "fill": "transparent"},
+        {"type": "text", "x": 278, "y": 160, "text": "Chloroplast",
+         "color": "#69db7c", "fontSize": 16},
+        {"type": "text", "x": 273, "y": 183, "text": "Light-dependent",
+         "color": "#51cf66", "fontSize": 12},
+        {"type": "text", "x": 286, "y": 199, "text": "reactions",
+         "color": "#51cf66", "fontSize": 12},
+    ])
 
-    # Arrows into chloroplast
-    c.append({"type": "arrow", "from": [200, 97], "to": [258, 155],
-              "color": "#ffd43b", "strokeWidth": 2})
-    c.append({"type": "arrow", "from": [200, 192], "to": [250, 185],
-              "color": "#74c0fc", "strokeWidth": 2})
-    c.append({"type": "arrow", "from": [200, 287], "to": [258, 220],
-              "color": "#adb5bd", "strokeWidth": 2})
+    # Step 3: Arrows into chloroplast
+    c += _step(3, "Energy Flows In", [
+        {"type": "arrow", "from": [200, 97], "to": [258, 155],
+         "color": "#ffd43b", "strokeWidth": 2},
+        {"type": "arrow", "from": [200, 192], "to": [250, 185],
+         "color": "#74c0fc", "strokeWidth": 2},
+        {"type": "arrow", "from": [200, 287], "to": [258, 220],
+         "color": "#adb5bd", "strokeWidth": 2},
+    ])
 
-    # ── Outputs (right) ──
-    out = [
+    # Step 4: Outputs + arrows out
+    out_cmds = []
+    for label, color, x, y in [
         ("Glucose  C6H12O6", "#ffa94d", 460, 100),
         ("Oxygen  O2", "#ff8787", 460, 220),
+    ]:
+        out_cmds += [
+            {"type": "rectangle", "x": x, "y": y, "width": 160, "height": 55,
+             "color": color, "strokeWidth": 2, "fill": "transparent"},
+            {"type": "text", "x": x + 12, "y": y + 15,
+             "text": label, "color": color, "fontSize": 14},
+        ]
+    out_cmds += [
+        {"type": "arrow", "from": [400, 170], "to": [460, 127],
+         "color": "#ffa94d", "strokeWidth": 2},
+        {"type": "text", "x": 405, "y": 132, "text": "Energy stored",
+         "color": "#ffa94d", "fontSize": 11},
+        {"type": "arrow", "from": [400, 200], "to": [460, 247],
+         "color": "#ff8787", "strokeWidth": 2},
+        {"type": "text", "x": 405, "y": 230, "text": "Released",
+         "color": "#ff8787", "fontSize": 11},
     ]
-    for label, color, x, y in out:
-        c.append({"type": "rectangle", "x": x, "y": y,
-                  "width": 160, "height": 55,
-                  "color": color, "strokeWidth": 2, "fill": "transparent"})
-        c.append({"type": "text", "x": x + 12, "y": y + 15,
-                  "text": label, "color": color, "fontSize": 14})
+    c += _step(4, "Outputs", out_cmds)
 
-    # Arrows out of chloroplast
-    c.append({"type": "arrow", "from": [400, 170], "to": [460, 127],
-              "color": "#ffa94d", "strokeWidth": 2})
-    c.append({"type": "text", "x": 405, "y": 132,
-              "text": "Energy stored", "color": "#ffa94d", "fontSize": 11})
-    c.append({"type": "arrow", "from": [400, 200], "to": [460, 247],
-              "color": "#ff8787", "strokeWidth": 2})
-    c.append({"type": "text", "x": 405, "y": 230,
-              "text": "Released", "color": "#ff8787", "fontSize": 11})
-
-    # ── Balanced equation ──
-    c.append({"type": "text", "x": 80, "y": 350,
-              "text": "6CO2 + 6H2O + Light Energy  -->  C6H12O6 + 6O2",
-              "color": "#dee2e6", "fontSize": 17})
+    # Step 5: Balanced equation
+    c += _step(5, "Chemical Equation", [
+        {"type": "text", "x": 80, "y": 350,
+         "text": "6CO2 + 6H2O + Light Energy  -->  C6H12O6 + 6O2",
+         "color": "#dee2e6", "fontSize": 17},
+    ])
 
     return c
 
@@ -2138,29 +2161,32 @@ def _diagram_from_bold_terms(answer):
     if not unique:
         return []
 
-    commands = []
-    # Size boxes based on longest label
     max_len = max(len(t) for t in unique)
     bw = max(220, max_len * 10 + 40)
     bh = 55
     gap = 70
     sx = 60
-
-    commands.append({"type": "text", "x": sx, "y": 10,
-                     "text": "Key Concepts", "color": "#ffffff", "fontSize": 20})
+    commands = []
 
     for i, term in enumerate(unique):
         y = 50 + i * (bh + gap)
-        commands.append({"type": "rectangle", "x": sx, "y": y,
-                         "width": bw, "height": bh,
-                         "color": "#a5d8ff", "strokeWidth": 2, "fill": "transparent"})
-        commands.append({"type": "text", "x": sx + 15, "y": y + 16,
-                         "text": term, "color": "#a5d8ff", "fontSize": 16})
+        step_n = i + 1
+        row = []
+        if i == 0:
+            row.append({"type": "text", "x": sx, "y": 10,
+                        "text": "Key Concepts", "color": "#ffffff", "fontSize": 20})
+        row += [
+            {"type": "rectangle", "x": sx, "y": y, "width": bw, "height": bh,
+             "color": "#a5d8ff", "strokeWidth": 2, "fill": "transparent"},
+            {"type": "text", "x": sx + 15, "y": y + 16,
+             "text": term, "color": "#a5d8ff", "fontSize": 16},
+        ]
         if i < len(unique) - 1:
-            commands.append({"type": "arrow",
-                             "from": [sx + bw // 2, y + bh],
-                             "to":   [sx + bw // 2, y + bh + gap],
-                             "color": "#868e96", "strokeWidth": 1})
+            row.append({"type": "arrow",
+                        "from": [sx + bw // 2, y + bh],
+                        "to":   [sx + bw // 2, y + bh + gap],
+                        "color": "#868e96", "strokeWidth": 1})
+        commands += _step(step_n, term, row)
 
     return commands
 
