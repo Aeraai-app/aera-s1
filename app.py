@@ -1603,6 +1603,7 @@ def ask():
             max_tokens=1600,    # enough for 5–6 full steps without cutting off
         )
         answer = r.choices[0].message.content.strip()
+        answer = _strip_ascii_art(answer)
         answer = auto_inject_chart(answer)
 
         # Update user model from this exchange
@@ -1644,6 +1645,71 @@ def ask():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def _strip_ascii_art(text):
+    """Remove ASCII-art / text-diagram blocks the model occasionally emits despite
+    the system-prompt ban. Conservative by design: only strips lines that are
+    clearly drawings (box-drawing characters, or dense runs of structural
+    punctuation with almost no words). Normal prose, math, and real code survive."""
+    if not text:
+        return text
+
+    BOX = "─│┌┐└┘├┤┬┴┼╔╗╚╝║═╠╣╦╩╬▲▼◄►▶◀●○◦◆◇■□▏▕▔▁╭╮╯╰┄┈┃━"
+    box_set = set(BOX)
+    STRUCT = set("|+-_=/\\<>^~*.:") | box_set
+
+    def is_art_line(line):
+        s = line.rstrip()
+        stripped = s.strip()
+        # any box-drawing glyph is an unambiguous diagram signal (even alone)
+        if any(c in box_set for c in s):
+            return True
+        if len(stripped) < 3:
+            return False
+        # a row fully bracketed by border chars is a diagram cell, e.g. "|  Nucleus  |"
+        if stripped[0] in "|│+" and stripped[-1] in "|│+":
+            return True
+        non_ws = [c for c in s if not c.isspace()]
+        if not non_ws:
+            return False
+        struct = sum(1 for c in non_ws if c in STRUCT)
+        letters = sum(1 for c in non_ws if c.isalnum())
+        # dense structural punctuation with essentially no words = drawing
+        return struct / len(non_ws) >= 0.55 and letters <= max(2, len(non_ws) * 0.25)
+
+    lines = text.split("\n")
+    out, i, n = [], 0, len(lines)
+    while i < n:
+        line = lines[i]
+        # Fenced code blocks: drop the whole block only if it's mostly art;
+        # otherwise keep it verbatim (real code is explicitly allowed).
+        if line.lstrip().startswith("```"):
+            j = i + 1
+            block = []
+            while j < n and not lines[j].lstrip().startswith("```"):
+                block.append(lines[j])
+                j += 1
+            content = [b for b in block if b.strip()]
+            art = sum(1 for b in content if is_art_line(b))
+            if content and art / len(content) >= 0.6:
+                i = j + 1 if j < n else j
+                continue
+            out.append(line)
+            out.extend(block)
+            if j < n:
+                out.append(lines[j])
+            i = j + 1
+            continue
+
+        if is_art_line(line):
+            i += 1
+            continue
+        out.append(line)
+        i += 1
+
+    result = re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+    return result.strip("\n")
 
 
 def _tag_answer_with_highlights(answer, draw_commands):

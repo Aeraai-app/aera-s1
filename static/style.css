@@ -11,44 +11,46 @@
 ─────────────────────────────────────────────────────── */
 :root,
 [data-theme="dark"] {
-  /* grey layers */
-  --bg:           #181818;      /* main canvas — dark gray, not black */
-  --surface:      #222222;      /* panels slightly lifted */
-  --surface-hi:   #2c2c2c;      /* hover / active layer */
-  --surface-lo:   #0f0f0f;      /* sidebar, deeper than main */
+  /* grey layers — neutral, premium dark */
+  --bg:           #1e1e1e;      /* main canvas */
+  --surface:      #252527;      /* panels slightly lifted */
+  --surface-hi:   #2e2e31;      /* hover / active layer */
+  --surface-lo:   #181819;      /* sidebar, deeper than main */
 
-  /* borders — very subtle, decorative only */
-  --border:       rgba(255,255,255,0.06);
-  --border-hi:    rgba(255,255,255,0.10);
+  /* borders — subtle, decorative */
+  --border:       rgba(255,255,255,0.07);
+  --border-hi:    rgba(255,255,255,0.13);
 
   /* text */
-  --text:         #ececec;      /* soft white, never pure */
-  --text-dim:     #a6a6a6;
-  --text-muted:   #6a6a6a;
+  --text:         #e0e0e0;      /* soft white */
+  --text-dim:     #a3abb6;
+  --text-muted:   #6e7681;
 
-  /* accent — soft indigo */
-  --accent:       #8b7cf6;
-  --accent-hi:    #9d90f8;
+  /* accent — clean blue */
+  --accent:       #58a6ff;
+  --accent-hi:    #79b8ff;
   --accent-on:    #ffffff;      /* text color on accent bg */
-  --accent-soft:  rgba(139,124,246,0.12);
-  --accent-softer:rgba(139,124,246,0.06);
+  --accent-soft:  rgba(88,166,255,0.14);
+  --accent-softer:rgba(88,166,255,0.07);
+  --accent-grad:  linear-gradient(180deg, #6cb2ff 0%, #3b8eea 100%);
 
   /* bubbles + inputs */
-  --user-bubble:  #2c2c2c;
+  --user-bubble:  #2b2d31;
   --ai-bubble:    transparent;
-  --input-bg:     #262626;
-  --chip-bg:      #242424;
+  --input-bg:     #232325;
+  --chip-bg:      #232325;
 
   /* status */
-  --danger:       #ef6b6b;
-  --success:      #7ec17e;
+  --danger:       #f0726f;
+  --success:      #6cc790;
 
-  /* depth */
-  --shadow-xs:    0 1px 2px rgba(0,0,0,0.20);
-  --shadow-sm:    0 2px 6px rgba(0,0,0,0.25);
-  --shadow:       0 4px 14px rgba(0,0,0,0.30);
-  --shadow-lg:    0 18px 50px rgba(0,0,0,0.45);
-  --shadow-accent:0 6px 22px rgba(139,124,246,0.22);
+  /* depth — richer shadows for premium feel */
+  --shadow-xs:    0 1px 2px rgba(0,0,0,0.30);
+  --shadow-sm:    0 2px 8px rgba(0,0,0,0.35);
+  --shadow:       0 8px 24px rgba(0,0,0,0.42);
+  --shadow-lg:    0 24px 60px rgba(0,0,0,0.55);
+  --shadow-accent:0 6px 22px rgba(88,166,255,0.32);
+  --ring:         rgba(88,166,255,0.45);
 }
 
 [data-theme="light"] {
@@ -67,12 +69,13 @@
   --text-dim:     #575757;
   --text-muted:   #8a8a8a;
 
-  /* accent — slightly deeper for contrast on light */
-  --accent:       #6b57e0;
-  --accent-hi:    #5a46d3;
+  /* accent — clean blue, deeper for contrast on light */
+  --accent:       #1f6feb;
+  --accent-hi:    #388bfd;
   --accent-on:    #ffffff;
-  --accent-soft:  rgba(107,87,224,0.10);
-  --accent-softer:rgba(107,87,224,0.05);
+  --accent-soft:  rgba(31,111,235,0.10);
+  --accent-softer:rgba(31,111,235,0.05);
+  --accent-grad:  linear-gradient(180deg, #4493f8 0%, #1f6feb 100%);
 
   /* bubbles + inputs */
   --user-bubble:  #ececea;
@@ -89,7 +92,8 @@
   --shadow-sm:    0 2px 8px rgba(15,15,15,0.06);
   --shadow:       0 4px 16px rgba(15,15,15,0.07);
   --shadow-lg:    0 16px 40px rgba(15,15,15,0.10);
-  --shadow-accent:0 6px 20px rgba(107,87,224,0.22);
+  --shadow-accent:0 6px 20px rgba(31,111,235,0.25);
+  --ring:         rgba(31,111,235,0.40);
 }
 
 :root {
@@ -2418,4 +2422,120 @@ body.teach-dragging { cursor: col-resize; user-select: none; }
   .tl-play-btn { width: 38px; height: 38px; }
   .tl-speed-btn { padding: 5px 10px; font-size: 0.72rem; }
   .tl-scrubber::-webkit-slider-thumb { width: 18px; height: 18px; margin-top: -7px; }
+}
+
+/* ═══════════════════════════════════════════════════
+   PREMIUM POLISH  (2026 design refresh)
+   Layered on top of the base styles. Adds depth, motion,
+   gradient accents and clean focus states across the app.
+   ═══════════════════════════════════════════════════ */
+
+:root { --dur: 0.22s; --ease-out: cubic-bezier(.22,.61,.36,1); }
+
+/* Smooth, consistent motion on interactive surfaces */
+button, a, .nav-item, .chat-history-item, .home-quick-btn,
+.input-tool-btn, .home-media-btn, .auth-avatar-btn,
+.sidebar-footer .theme-toggle, .sidebar-footer .world-toggle {
+  transition: background var(--dur) var(--ease-out),
+              color var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out),
+              transform var(--dur) var(--ease-out);
+}
+
+/* Accessible, on-brand focus ring */
+button:focus-visible, a:focus-visible, textarea:focus-visible,
+[role="button"]:focus-visible, .nav-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+
+/* ── Primary buttons: gradient, glow, lift ── */
+.home-send-btn, .generate-btn {
+  background: var(--accent-grad);
+  color: #fff;
+  box-shadow: var(--shadow-accent), inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: transform var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out), filter var(--dur) var(--ease-out);
+}
+.home-send-btn:hover:not(:disabled),
+.generate-btn:hover:not(:disabled) {
+  background: var(--accent-grad);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(88,166,255,0.40), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+.home-send-btn:active:not(:disabled),
+.generate-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+
+/* New-chat button — subtle gradient identity + lift */
+.new-chat-btn {
+  background: linear-gradient(180deg, var(--accent-soft), var(--accent-softer));
+  border: 1px solid var(--border);
+}
+.new-chat-btn:hover {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+/* ── Sidebar nav / history: animated hover + active accent bar ── */
+.nav-item, .chat-history-item { position: relative; }
+.nav-item:hover, .chat-history-item:hover { transform: translateX(2px); }
+.nav-item.active::before, .chat-history-item.active::before {
+  content: "";
+  position: absolute; left: 0; top: 50%;
+  width: 3px; height: 60%;
+  transform: translateY(-50%);
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+/* Small utility / tool buttons: hover lift + shadow */
+.home-quick-btn:hover, .input-tool-btn:hover, .home-media-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Inputs: refined focus glow */
+.home-input-box, .input-panel { transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out); }
+.home-input-box:focus-within, .input-panel:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-softer), var(--shadow-sm);
+}
+
+/* ── Teaching panel: premium framing + motion ── */
+.teach-panel {
+  background: var(--bg);
+  color: var(--text);
+  border-left: 1px solid var(--border-hi);
+  box-shadow: -18px 0 50px rgba(0,0,0,0.45);
+  transition: transform 280ms var(--ease-out);
+}
+.teach-close {
+  color: var(--text-dim);
+  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+}
+.teach-close:hover { background: var(--surface-hi); color: var(--text); transform: rotate(90deg); }
+.teach-resize:hover { background: var(--accent-soft); }
+.teach-dragging .teach-resize, .teach-resize:active { background: var(--accent); }
+
+/* Output panel + bubbles: soft depth */
+.output-panel { box-shadow: var(--shadow-sm); }
+.output-panel-header { border-bottom: 1px solid var(--border); }
+.home-bubble-user, .user-bubble {
+  box-shadow: var(--shadow-xs);
+}
+
+/* Layer toggle buttons: clearer on/off feedback */
+.layer-btn { transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out); }
+.layer-btn:hover { transform: translateY(-1px); }
+.layer-btn.layer-off { opacity: 0.45; }
+
+/* Honor reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

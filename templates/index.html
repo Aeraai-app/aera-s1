@@ -109,6 +109,35 @@
     };
 
     /* Convert a draw command → Excalidraw element skeleton */
+    /* Measure rendered text width using the actual Excalidraw font so labels
+       and text boxes are sized to fit instead of being clipped. Before web
+       fonts finish loading the canvas falls back to a system font, so we add a
+       safety margin; the document.fonts.ready pass later corrects exact sizes. */
+    var _measureCanvas = null;
+    function _excalFontCss(fontFamily, fs) {
+      var fam;
+      if (fontFamily === 3) fam = "'Comic Shanns', Cascadia, monospace";
+      else if (fontFamily === 2) fam = "Helvetica, Arial, sans-serif";
+      else fam = "Excalifont, Virgil, 'Segoe UI', sans-serif";
+      return Math.round(fs) + "px " + fam;
+    }
+    function _measureTextWidth(text, fs, fontFamily) {
+      if (!_measureCanvas) _measureCanvas = document.createElement("canvas");
+      var ctx = _measureCanvas.getContext("2d");
+      ctx.font = _excalFontCss(fontFamily, fs);
+      var lines = String(text).split("\n");
+      var max = 0;
+      for (var i = 0; i < lines.length; i++) {
+        var w = ctx.measureText(lines[i]).width;
+        if (w > max) max = w;
+      }
+      /* hand-drawn font renders a touch wider than the metric canvas reports */
+      return max * 1.08;
+    }
+    function _textLineCount(text) {
+      return String(text).split("\n").length;
+    }
+
     function _cmdToSkeleton(cmd) {
       var base = {
         strokeColor: cmd.color || "#ffffff",
@@ -123,10 +152,18 @@
       if (t === "rectangle") {
         var x = (cmd.x != null ? cmd.x : (cmd.from || [0])[0]) || 0;
         var y = (cmd.y != null ? cmd.y : (cmd.from || [0,0])[1]) || 0;
+        var w = cmd.width || 160, h = cmd.height || 80;
+        if (cmd.label) {
+          var lfs = cmd.fontSize || 16;
+          var needW = _measureTextWidth(cmd.label, lfs, 1) + 28;   /* horizontal padding */
+          var needH = _textLineCount(cmd.label) * lfs * 1.25 + 18; /* line-height + padding */
+          if (needW > w) w = Math.ceil(needW);
+          if (needH > h) h = Math.ceil(needH);
+        }
         var sk = Object.assign({}, base, {
           type: "rectangle",
           x: x, y: y,
-          width: cmd.width || 160, height: cmd.height || 80,
+          width: w, height: h,
         });
         if (cmd.label) sk.label = { text: cmd.label, fontSize: cmd.fontSize || 16, strokeColor: cmd.color || "#ffffff" };
         return sk;
@@ -135,11 +172,20 @@
       if (t === "circle" || t === "ellipse") {
         var x = (cmd.x != null ? cmd.x : (cmd.from || [0])[0]) || 0;
         var y = (cmd.y != null ? cmd.y : (cmd.from || [0,0])[1]) || 0;
+        var w = cmd.width || cmd.radius * 2 || 120;
+        var h = cmd.height || cmd.radius * 2 || 120;
+        if (cmd.label) {
+          var lfs = cmd.fontSize || 16;
+          /* text fits the inscribed box (~72% of the ellipse), so size up */
+          var needW = (_measureTextWidth(cmd.label, lfs, 1) + 28) / 0.72;
+          var needH = (_textLineCount(cmd.label) * lfs * 1.25 + 18) / 0.72;
+          if (needW > w) w = Math.ceil(needW);
+          if (needH > h) h = Math.ceil(needH);
+        }
         var sk = Object.assign({}, base, {
           type: "ellipse",
           x: x, y: y,
-          width: cmd.width || cmd.radius * 2 || 120,
-          height: cmd.height || cmd.radius * 2 || 120,
+          width: w, height: h,
         });
         if (cmd.label) sk.label = { text: cmd.label, fontSize: cmd.fontSize || 16, strokeColor: cmd.color || "#ffffff" };
         return sk;
@@ -225,14 +271,9 @@
            so Excalidraw corrects them once the real font is available. */
         newEls = newEls.map(function(el) {
           if (el.type === "text" && el.text) {
-            var lines = el.text.split("\n");
-            var maxLen = 0;
-            for (var j = 0; j < lines.length; j++) {
-              if (lines[j].length > maxLen) maxLen = lines[j].length;
-            }
             var fs = el.fontSize || 20;
-            var needW = Math.ceil(maxLen * fs * 0.65) + 16;
-            var needH = Math.ceil(lines.length * fs * 1.5) + 8;
+            var needW = Math.ceil(_measureTextWidth(el.text, fs, el.fontFamily)) + 20;
+            var needH = Math.ceil(_textLineCount(el.text) * fs * 1.25) + 10;
             return Object.assign({}, el, {
               width: Math.max(el.width || 0, needW),
               height: Math.max(el.height || 0, needH),
@@ -544,64 +585,53 @@
     }
 
     /* ── Layer toggle system ── */
+    function _newNonce() { return Math.floor(Math.random() * 2000000000); }
+
     window._setLayerVisibility = function(layer, visible) {
       if (layer === "ai") _layerShowAI = visible;
       else if (layer === "user") _layerShowUser = visible;
 
       if (!_excalAPI) return;
-      var elements = _excalAPI.getSceneElements() || [];
 
-      if (!visible) {
-        /* ── HIDE: back up full element copies, then mark deleted ── */
-        var updated = elements.map(function(el) {
-          var isAI = !!_aiElementIds[el.id];
-          var belongsToLayer = (layer === "ai" && isAI) || (layer === "user" && !isAI);
-          if (belongsToLayer && !el.isDeleted) {
-            _hiddenElements[el.id] = JSON.parse(JSON.stringify(el));
-            return Object.assign({}, el, {
-              isDeleted: true,
-              version: (el.version || 1) + 1,
-            });
-          }
-          return el;
-        });
-        _excalAPI.updateScene({ elements: updated });
-      } else {
-        /* ── SHOW: re-inject backed-up elements into the scene ── */
-        var sceneById = {};
-        for (var i = 0; i < elements.length; i++) sceneById[elements[i].id] = true;
+      /* Read elements INCLUDING deleted ones so a hidden layer can be brought
+         back. Excalidraw keeps deleted elements in the scene; toggling just
+         flips their isDeleted flag. The version bump (+2) and a fresh
+         versionNonce are essential — Excalidraw's reconciler ignores any
+         incoming element whose version is not strictly greater than the one
+         it already holds, which is why a re-show used to silently no-op. */
+      var getAll = _excalAPI.getSceneElementsIncludingDeleted
+        ? _excalAPI.getSceneElementsIncludingDeleted()
+        : _excalAPI.getSceneElements();
+      var elements = getAll || [];
 
-        /* Restore any elements still in scene (marked deleted) */
-        var updated = elements.map(function(el) {
-          if (_hiddenElements[el.id]) {
-            var backup = _hiddenElements[el.id];
-            delete _hiddenElements[el.id];
-            return Object.assign({}, backup, {
-              isDeleted: false,
-              version: (el.version || 1) + 1,
-            });
-          }
-          return el;
-        });
+      var changed = false;
+      var updated = elements.map(function(el) {
+        var isAI = !!_aiElementIds[el.id];
+        var belongsToLayer = (layer === "ai" && isAI) || (layer === "user" && !isAI);
+        if (!belongsToLayer) return el;
 
-        /* Re-add backed-up elements that Excalidraw garbage-collected */
-        var remaining = Object.keys(_hiddenElements);
-        for (var i = 0; i < remaining.length; i++) {
-          var id = remaining[i];
-          var isAI = !!_aiElementIds[id];
-          var belongsToLayer = (layer === "ai" && isAI) || (layer === "user" && !isAI);
-          if (belongsToLayer && !sceneById[id]) {
-            var backup = _hiddenElements[id];
-            delete _hiddenElements[id];
-            updated.push(Object.assign({}, backup, {
-              isDeleted: false,
-              version: (backup.version || 1) + 1,
-            }));
-          }
+        if (!visible && !el.isDeleted) {
+          changed = true;
+          _hiddenElements[el.id] = true;
+          return Object.assign({}, el, {
+            isDeleted: true,
+            version: (el.version || 1) + 2,
+            versionNonce: _newNonce(),
+          });
         }
+        if (visible && el.isDeleted) {
+          changed = true;
+          delete _hiddenElements[el.id];
+          return Object.assign({}, el, {
+            isDeleted: false,
+            version: (el.version || 1) + 2,
+            versionNonce: _newNonce(),
+          });
+        }
+        return el;
+      });
 
-        _excalAPI.updateScene({ elements: updated });
-      }
+      if (changed) _excalAPI.updateScene({ elements: updated });
 
       _updateLayerButtons();
       console.log('[Layers] ' + layer + ' → ' + (visible ? 'shown' : 'hidden'));
