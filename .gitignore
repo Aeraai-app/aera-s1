@@ -18,3 +18,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# local experiments & tooling
+_vibe_demos/
+.claude/

@@ -1522,6 +1522,11 @@ def build_system_prompt(material: str, free_mode: bool) -> str:
 # ── Core routes ───────────────────────────────────────────────────────────────
 
 @app.route("/")
+def landing():
+    return render_template("landing.html")
+
+
+@app.route("/app")
 def index():
     return render_template("index.html", clerk_key=CLERK_PUBLISHABLE_KEY, clerk_domain=CLERK_DOMAIN)
 
@@ -1753,6 +1758,143 @@ def _tag_answer_with_highlights(answer, draw_commands):
     return answer
 
 
+_DRAW_SYSTEM = """You generate diagrams for a visual teaching whiteboard. Given a topic and a tutor's explanation, output a JSON array of drawing commands that depict a CONCRETE, WORKED EXAMPLE — not abstract category boxes.
+
+HARD RULES:
+- Show a REAL example with REAL values. For math, write the actual numbers/equations/matrices and perform each operation. For processes, show the actual stages with their real content.
+- NEVER output vague boxes like "Step 1" / "Concept" / "Definition". Every element must carry real content a student can read and learn from.
+- Break the example into 2–6 ordered steps using the "step" field (1,2,3…). Put a short "stepLabel" on the FIRST command of each step. Later steps build on earlier ones.
+- Lay elements out on a canvas roughly 0–720 wide, 0–520 tall. Do NOT overlap text. Leave ~28px vertical gaps between text lines. Group each step's content in its own region (e.g. stack steps vertically or in columns).
+- Since real matrices/tables can't be rendered, write them as monospaced-looking text lines (one "text" command per row), aligned by using consistent x and spaced y.
+
+COMMAND SCHEMA (JSON objects):
+- {"type":"text","x":N,"y":N,"text":"...","color":"#hex","fontSize":N,"step":N,"stepLabel":"..."}
+- {"type":"rectangle"|"ellipse","x":N,"y":N,"width":N,"height":N,"color":"#hex","label":"optional text","step":N}
+- {"type":"arrow"|"line","from":[x,y],"to":[x,y],"color":"#hex","step":N}
+
+COLORS (use for clarity, dark background): titles #e0e0e0, primary #58a6ff, highlight/result #6cc790, operation/change #ffd43b, secondary #ff8787.
+
+Respond with ONLY the JSON array. No prose, no code fences.
+
+EXAMPLE — topic "solve 3x + 6 = 18":
+[
+ {"type":"text","x":40,"y":10,"text":"Solve: 3x + 6 = 18","color":"#e0e0e0","fontSize":22,"step":1,"stepLabel":"The equation"},
+ {"type":"text","x":40,"y":70,"text":"3x + 6 = 18","color":"#58a6ff","fontSize":20,"step":2,"stepLabel":"Subtract 6 from both sides"},
+ {"type":"text","x":40,"y":100,"text":"-6        -6","color":"#ffd43b","fontSize":18,"step":2},
+ {"type":"text","x":40,"y":135,"text":"3x = 12","color":"#58a6ff","fontSize":20,"step":3,"stepLabel":"Divide both sides by 3"},
+ {"type":"text","x":40,"y":165,"text":"3x/3 = 12/3","color":"#ffd43b","fontSize":18,"step":3},
+ {"type":"text","x":40,"y":205,"text":"x = 4","color":"#6cc790","fontSize":24,"step":4,"stepLabel":"Solution"}
+]"""
+
+
+def _sanitize_draw_commands(raw):
+    """Validate/clean a list of LLM-produced draw commands. Returns [] if unusable."""
+    if not isinstance(raw, list):
+        return []
+    valid_types = {"arrow", "line", "rectangle", "ellipse", "circle", "text"}
+    out = []
+    auto_step = 1
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        t = item.get("type")
+        if t not in valid_types:
+            continue
+        cmd = {"type": "ellipse" if t == "circle" else t}
+
+        def _num(v, lo=-200, hi=1600, default=None):
+            try:
+                n = float(v)
+            except (TypeError, ValueError):
+                return default
+            return max(lo, min(hi, n))
+
+        if t in ("arrow", "line"):
+            fr, to = item.get("from"), item.get("to")
+            if not (isinstance(fr, list) and isinstance(to, list) and len(fr) == 2 and len(to) == 2):
+                continue
+            fx, fy, tx, ty = _num(fr[0]), _num(fr[1]), _num(to[0]), _num(to[1])
+            if None in (fx, fy, tx, ty):
+                continue
+            cmd["from"], cmd["to"] = [fx, fy], [tx, ty]
+        else:
+            x, y = _num(item.get("x")), _num(item.get("y"))
+            if x is None or y is None:
+                continue
+            cmd["x"], cmd["y"] = x, y
+            if t == "text":
+                txt = item.get("text") or item.get("label") or ""
+                if not str(txt).strip():
+                    continue
+                cmd["text"] = str(txt)[:120]
+                cmd["fontSize"] = _num(item.get("fontSize"), 8, 40, 18)
+            else:
+                cmd["width"] = _num(item.get("width"), 4, 1400, 120)
+                cmd["height"] = _num(item.get("height"), 4, 1000, 80)
+                if item.get("label"):
+                    cmd["label"] = str(item["label"])[:80]
+
+        color = item.get("color")
+        if isinstance(color, str) and re.match(r"^#[0-9a-fA-F]{3,8}$", color):
+            cmd["color"] = color
+        else:
+            cmd["color"] = "#58a6ff"
+
+        try:
+            cmd["step"] = max(1, int(item.get("step", auto_step)))
+        except (TypeError, ValueError):
+            cmd["step"] = auto_step
+        if item.get("stepLabel"):
+            cmd["stepLabel"] = str(item["stepLabel"])[:60]
+        out.append(cmd)
+        auto_step = cmd["step"]
+
+    if len(out) < 2:
+        return []
+    out = out[:60]
+
+    # Ensure each step group has a stepLabel on its first command
+    seen_steps = {}
+    for cmd in out:
+        s = cmd["step"]
+        if s not in seen_steps:
+            seen_steps[s] = cmd
+            cmd.setdefault("stepLabel", "Step " + str(s))
+    return out
+
+
+def _llm_draw_commands(answer, user_msg):
+    """Ask the model to draw a concrete worked example. Returns [] on any failure
+    so the caller can fall back to a simpler diagram."""
+    try:
+        client = get_client()
+        user_content = (
+            "Topic the student asked about:\n" + (user_msg or "").strip()[:400] +
+            "\n\nThe tutor's explanation (use it for the actual content/values):\n" +
+            (answer or "").strip()[:2000] +
+            "\n\nDraw the worked example now as a JSON array."
+        )
+        r = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": _DRAW_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.3,
+            max_tokens=1400,
+        )
+        text = (r.choices[0].message.content or "").strip()
+        # Extract the JSON array even if the model wrapped it in fences/prose
+        m = re.search(r"\[.*\]", text, re.DOTALL)
+        if not m:
+            return []
+        parsed = json.loads(m.group(0))
+        return _sanitize_draw_commands(parsed)
+    except Exception as e:
+        print("[draw] LLM diagram generation failed:", e)
+        return []
+
+
 def _generate_draw_commands(answer, user_msg):
     """Pick a preset diagram based on topic, or build one from bold terms."""
     low = (user_msg or "").lower()
@@ -1784,7 +1926,11 @@ def _generate_draw_commands(answer, user_msg):
                                "plant", "sunlight", "glucose"]):
         return _diagram_photosynthesis()
 
-    # ── Fallback: build a flow chart from bold terms in the answer ─
+    # ── No preset matched: have the model draw a real worked example ─
+    llm_cmds = _llm_draw_commands(answer, user_msg)
+    if llm_cmds:
+        return llm_cmds
+    # Last resort: simple flow chart from bold terms in the answer
     return _diagram_from_bold_terms(answer)
 
 

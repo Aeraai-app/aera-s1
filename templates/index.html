@@ -341,15 +341,20 @@
       if (!elements || !elements.length) return;
       var low = term.toLowerCase();
 
-      /* 1. Find all text elements whose text contains the term */
-      var matchedTexts = [];
+      /* 1. Find text elements matching the term. Prefer an EXACT match so
+            hovering "Photosynthesis" lights up the title itself rather than
+            every element that merely contains the word. Fall back to substring
+            matches only when there is no exact match. */
+      var matchedTexts = [], exactTexts = [];
       for (var i = 0; i < elements.length; i++) {
         var el = elements[i];
-        if (el.type === "text" && el.text &&
-            el.text.toLowerCase().indexOf(low) !== -1) {
-          matchedTexts.push(el);
-        }
+        if (el.type !== "text" || !el.text) continue;
+        var et = el.text.toLowerCase().trim();
+        var etClean = et.replace(/[\s:.,;–—-]+$/, "");
+        if (et === low || etClean === low) exactTexts.push(el);
+        else if (et.indexOf(low) !== -1) matchedTexts.push(el);
       }
+      if (exactTexts.length) matchedTexts = exactTexts;
       if (!matchedTexts.length) {
         console.log('[Highlight] No text match for "' + term + '"');
         return;
@@ -365,9 +370,13 @@
           targetIds[txt.containerId] = true;
           continue;
         }
-        /* Standalone text: find nearest shape (skip tiny dots, lines, text) */
+        /* Standalone text: always light up the matched word itself, and ALSO
+           a shape only when it sits right next to the text (i.e. it's that
+           text's label). Prevents highlighting a random far-away shape — the
+           old behaviour that lit up "sunlight" when hovering "photosynthesis". */
+        targetIds[txt.id] = true;
         var tx = txt.x || 0, ty = txt.y || 0;
-        var bestId = null, bestDist = 200;
+        var bestId = null, bestDist = 90;
         for (var j = 0; j < elements.length; j++) {
           var s = elements[j];
           if (s.type === "text" || s.type === "line" || s.isDeleted) continue;
@@ -377,11 +386,7 @@
           var d = Math.sqrt((tx - cx) * (tx - cx) + (ty - cy) * (ty - cy));
           if (d < bestDist) { bestDist = d; bestId = s.id; }
         }
-        if (bestId) {
-          targetIds[bestId] = true;
-        } else {
-          targetIds[txt.id] = true;   /* fallback: color the text itself */
-        }
+        if (bestId) targetIds[bestId] = true;
       }
 
       var ids = Object.keys(targetIds);
@@ -586,6 +591,31 @@
 
     /* ── Layer toggle system ── */
     function _newNonce() { return Math.floor(Math.random() * 2000000000); }
+
+    /* Wipe the canvas so a new teaching topic starts on a fresh page instead
+       of drawing on top of the previous diagram. */
+    window._resetCanvasElements = function() {
+      _aiElementIds = {};
+      _hiddenElements = {};
+      _layerShowAI = true;
+      _layerShowUser = true;
+      if (!_excalAPI) return;
+      var getAll = _excalAPI.getSceneElementsIncludingDeleted
+        ? _excalAPI.getSceneElementsIncludingDeleted()
+        : (_excalAPI.getSceneElements() || []);
+      var els = getAll || [];
+      if (!els.length) { if (_updateLayerButtons) _updateLayerButtons(); return; }
+      var cleared = els.map(function(el) {
+        if (el.isDeleted) return el;
+        return Object.assign({}, el, {
+          isDeleted: true,
+          version: (el.version || 1) + 2,
+          versionNonce: _newNonce(),
+        });
+      });
+      _excalAPI.updateScene({ elements: cleared });
+      if (_updateLayerButtons) _updateLayerButtons();
+    };
 
     window._setLayerVisibility = function(layer, visible) {
       if (layer === "ai") _layerShowAI = visible;
@@ -2459,6 +2489,8 @@ function _hasStepMeta(cmds) {
   return Array.isArray(cmds) && cmds.some(function(c) { return c && c.step != null; });
 }
 function _dispatchDraw(cmds) {
+  /* Start each new topic on a clean canvas (no drawing over the last one) */
+  if (window._resetCanvasElements) window._resetCanvasElements();
   if (_hasStepMeta(cmds)) _tlInit(cmds);
   else if (window._drawOnExcalidraw) window._drawOnExcalidraw(cmds);
 }
